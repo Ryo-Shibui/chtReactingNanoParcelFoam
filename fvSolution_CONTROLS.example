@@ -1,0 +1,27 @@
+// Put these entries in system/<fluidRegion>/fvSolution -> PIMPLE
+
+PIMPLE
+{
+    nOuterCorrectors          3;
+    nCorrectors               1;
+    nNonOrthogonalCorrectors  0;
+
+    momentumPredictor true;
+
+    // Eulerian solve controls
+    solveFlow       true;
+    solveSpecies    true;
+    solveEnergy     true;
+
+    // Lagrangian cloud switch (read once at solver startup)
+    solveParcels    false;
+}
+
+// STEADY carrier + CHT:
+//   all fluid/solid fvSchemes: default ddt = steadyState
+//   solveParcels false
+//   controlDict: adjustTimeStep no; deltaT 1 is convenient as iteration index
+//
+// TRANSIENT carrier + parcels:
+//   all fluid/solid fvSchemes: default ddt = Euler/backward/etc.
+//   solveParcels true

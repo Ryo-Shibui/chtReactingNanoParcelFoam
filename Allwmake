@@ -1,0 +1,13 @@
+#!/bin/sh
+cd "${0%/*}" || exit 1
+
+: "${WM_PROJECT_DIR:?OpenFOAM environment is not loaded. Run the OpenFOAM-v2406 bashrc first.}"
+
+echo "Building custom Lagrangian libraries..."
+wmake libso lagrangian/distributionModels || exit 1
+wmake libso lagrangian/basic || exit 1
+wmake libso lagrangian/intermediate || exit 1
+wmake libso lagrangian/turbulence || exit 1
+
+echo "Building chtReactingNanoParcelFoam..."
+wmake || exit 1

@@ -1,0 +1,1774 @@
+diff -ruN review_solver/chtReactingNanoParcelFoam/PATCH_SUMMARY.diff chtReactingNanoParcelFoam_reviewed/PATCH_SUMMARY.diff
+--- review_solver/chtReactingNanoParcelFoam/PATCH_SUMMARY.diff	2026-09-03 10:03:39.000000000 +0000
++++ chtReactingNanoParcelFoam_reviewed/PATCH_SUMMARY.diff	2026-09-07 01:44:20.765137792 +0000
+@@ -1,766 +0,0 @@
+---- /mnt/data/cht/chtMultiRegionFoam/Make/files	2026-09-03 09:32:00.000000000 +0000
+-+++ /mnt/data/chtReactingNanoParcelFoam/Make/files	2026-09-03 09:55:14.697136816 +0000
+-@@ -1,5 +1,5 @@
+- fluid/compressibleCourantNo.C
+- solid/solidRegionDiffNo.C
+--chtMultiRegionFoam.C
+-+chtReactingNanoParcelFoam.C
+- 
+--EXE = $(FOAM_APPBIN)/chtMultiRegionFoam
+-+EXE = $(FOAM_USER_APPBIN)/chtReactingNanoParcelFoam
+---- /mnt/data/cht/chtMultiRegionFoam/Make/options	2026-09-03 09:32:00.000000000 +0000
+-+++ /mnt/data/chtReactingNanoParcelFoam/Make/options	2026-09-03 09:55:14.698051469 +0000
+-@@ -4,35 +4,49 @@
+-     -I./porousFluid \
+-     -I./porousSolid \
+-     -I./include \
+-+    -I./lagrangian/basic/lnInclude \
+-+    -I./lagrangian/intermediate/lnInclude \
+-+    -I./lagrangian/turbulence/lnInclude \
+-     -I$(LIB_SRC)/finiteVolume/lnInclude \
+-+    -I$(LIB_SRC)/finiteArea/lnInclude \
+-     -I$(LIB_SRC)/meshTools/lnInclude \
+-     -I$(LIB_SRC)/sampling/lnInclude \
+-+    -I$(LIB_SRC)/dynamicMesh/lnInclude \
+-+    -I$(LIB_SRC)/dynamicFvMesh/lnInclude \
+-     -I$(LIB_SRC)/transportModels/compressible/lnInclude \
+-     -I$(LIB_SRC)/thermophysicalModels/basic/lnInclude \
+-     -I$(LIB_SRC)/thermophysicalModels/specie/lnInclude \
+-+    -I$(LIB_SRC)/thermophysicalModels/thermophysicalProperties/lnInclude \
+-     -I$(LIB_SRC)/thermophysicalModels/reactionThermo/lnInclude \
+-     -I$(LIB_SRC)/thermophysicalModels/solidThermo/lnInclude \
+-     -I$(LIB_SRC)/thermophysicalModels/chemistryModel/lnInclude \
+-+    -I$(LIB_SRC)/thermophysicalModels/SLGThermo/lnInclude \
+-     -I$(LIB_SRC)/ODE/lnInclude \
+-     -I$(LIB_SRC)/combustionModels/lnInclude \
+-     -I$(LIB_SRC)/TurbulenceModels/turbulenceModels/lnInclude \
+-     -I$(LIB_SRC)/TurbulenceModels/compressible/lnInclude \
+-     -I$(LIB_SRC)/thermophysicalModels/radiation/lnInclude \
+-     -I$(LIB_SRC)/regionModels/regionModel/lnInclude \
+--    -I$(LIB_SRC)/regionFaModels/lnInclude
+--
+-+    -I$(LIB_SRC)/regionModels/surfaceFilmModels/lnInclude \
+-+    -I$(LIB_SRC)/regionFaModels/lnInclude \
+-+    -I$(LIB_SRC)/faOptions/lnInclude
+- 
+- EXE_LIBS = \
+-+    -L$(FOAM_USER_LIBBIN) \
+-     -lfiniteVolume \
+-     -lfvOptions \
+-     -lmeshTools \
+-     -lsampling \
+-+    -ldynamicMesh \
+-+    -ldynamicFvMesh \
+-     -lcompressibleTransportModels \
+-     -lfluidThermophysicalModels \
+-     -lspecie \
+-     -lreactionThermophysicalModels \
+-+    -lthermophysicalProperties \
+-     -lsolidThermo \
+-     -lchemistryModel \
+-+    -lSLGThermo \
+-     -lODE \
+-     -lcombustionModels \
+-     -lturbulenceModels \
+-@@ -40,5 +54,11 @@
+-     -lthermoTools \
+-     -lradiationModels \
+-     -lregionModels \
+-+    -lsurfaceFilmModels \
+-+    -lsurfaceFilmDerivedFvPatchFields \
+-     -lregionFaModels \
+--    -lfiniteArea
+-+    -lfiniteArea \
+-+    -lfaOptions \
+-+    -llagrangianNew \
+-+    -llagrangianNewIntermediate \
+-+    -llagrangianNewTurbulence
+---- /mnt/data/cht/chtMultiRegionFoam/fluid/createFluidFields.H	2026-09-03 09:32:01.000000000 +0000
+-+++ /mnt/data/chtReactingNanoParcelFoam/fluid/createFluidFields.H	2026-09-03 10:01:33.463308963 +0000
+-@@ -18,8 +18,10 @@
+- 
+- PtrList<fvVectorMatrix> UEqFluid(fluidRegions.size());
+- 
+--List<scalar> initialMassFluid(fluidRegions.size());
+-+List<scalar> targetMassFluid(fluidRegions.size());
+- List<bool> frozenFlowFluid(fluidRegions.size(), false);
+-+List<bool> solveSpeciesFluid(fluidRegions.size(), true);
+-+List<bool> solveEnergyFluid(fluidRegions.size(), true);
+- 
+- PtrList<IOMRFZoneList> MRFfluid(fluidRegions.size());
+- PtrList<fv::options> fluidFvOptions(fluidRegions.size());
+-@@ -32,6 +34,12 @@
+- 
+- PtrList<pressureControl> pressureControls(fluidRegions.size());
+- 
+-+// Declare dependent objects after their carrier fields so that C++ destroys
+-+// them first at solver shutdown (reverse declaration order).
+-+PtrList<SLGThermo> slgThermoFluid(fluidRegions.size());
+-+PtrList<basicReactingTypeCloud> parcelsFluid(fluidRegions.size());
+-+PtrList<regionModels::surfaceFilmModel> surfaceFilmFluid(fluidRegions.size());
+-+
+- const uniformDimensionedVectorField& g = meshObjects::gravity::New(runTime);
+- 
+- // Populate fluid field pointer lists
+-@@ -42,6 +50,14 @@
+- 
+-     Info<< "    Adding to thermoFluid\n" << endl;
+-     thermoFluid.set(i, rhoReactionThermo::New(fluidRegions[i]).ptr());
+-+    thermoFluid[i].validate(args.executable(), "h", "e");
+-+
+-+    Info<< "    Adding to SLGThermo\n" << endl;
+-+    slgThermoFluid.set
+-+    (
+-+        i,
+-+        new SLGThermo(fluidRegions[i], thermoFluid[i])
+-+    );
+- 
+-     Info<< "    Adding to rhoFluid\n" << endl;
+-     rhoFluid.set
+-@@ -198,7 +214,7 @@
+-         radiation::radiationModel::New(thermoFluid[i].T())
+-     );
+- 
+--    initialMassFluid[i] = fvc::domainIntegrate(rhoFluid[i]).value();
+-+    targetMassFluid[i] = fvc::domainIntegrate(rhoFluid[i]).value();
+- 
+-     Info<< "    Adding to KFluid\n" << endl;
+-     KFluid.set
+-@@ -261,7 +277,22 @@
+- 
+-     const dictionary& pimpleDict =
+-         fluidRegions[i].solutionDict().subDict("PIMPLE");
+--    pimpleDict.readIfPresent("frozenFlow", frozenFlowFluid[i]);
+-+
+-+    // Preserve the useful split-solve controls from reactingNanoParcelFoam.
+-+    // solveFlow takes precedence when present; otherwise retain the native
+-+    // chtMultiRegionFoam frozenFlow control.
+-+    bool solveFlow = true;
+-+    if (pimpleDict.readIfPresent("solveFlow", solveFlow))
+-+    {
+-+        frozenFlowFluid[i] = !solveFlow;
+-+    }
+-+    else
+-+    {
+-+        pimpleDict.readIfPresent("frozenFlow", frozenFlowFluid[i]);
+-+    }
+-+
+-+    pimpleDict.readIfPresent("solveSpecies", solveSpeciesFluid[i]);
+-+    pimpleDict.readIfPresent("solveEnergy", solveEnergyFluid[i]);
+- 
+-     rhoMaxFluid.set
+-     (
+-@@ -303,6 +334,29 @@
+- 
+-     turbulenceFluid[i].validate();
+- 
+-+    // Construct Lagrangian/film models only after the carrier thermo, U, phi,
+-+    // turbulence and auxiliary fields have been registered on this region.
+-+    Info<< "    Constructing reacting nano cloud\n" << endl;
+-+    parcelsFluid.set
+-+    (
+-+        i,
+-+        new basicReactingTypeCloud
+-+        (
+-+            "reactingCloud1",
+-+            rhoFluid[i],
+-+            UFluid[i],
+-+            g,
+-+            slgThermoFluid[i]
+-+        )
+-+    );
+-+
+-+    Info<< "    Constructing surface film model\n" << endl;
+-+    surfaceFilmFluid.set
+-+    (
+-+        i,
+-+        regionModels::surfaceFilmModel::New(fluidRegions[i], g).ptr()
+-+    );
+-+
+-     pRefCellFluid[i] = -1;
+-     pRefValueFluid[i] = 0.0;
+- 
+---- /mnt/data/cht/chtMultiRegionFoam/fluid/setRegionFluidFields.H	2026-09-03 09:32:01.000000000 +0000
+-+++ /mnt/data/chtReactingNanoParcelFoam/fluid/setRegionFluidFields.H	2026-09-03 10:02:53.211035552 +0000
+-@@ -1,3 +1,7 @@
+-+    SLGThermo& slgThermo = slgThermoFluid[i];
+-+    basicReactingTypeCloud& parcels = parcelsFluid[i];
+-+    regionModels::surfaceFilmModel& surfaceFilm = surfaceFilmFluid[i];
+-+
+-     CombustionModel<rhoReactionThermo>& reaction = reactionFluid[i];
+- 
+-     rhoReactionThermo& thermo = reaction.thermo();
+-@@ -49,14 +53,16 @@
+- 
+-     fvVectorMatrix& UEqn = UEqFluid[i];
+- 
+--    const dimensionedScalar initialMass
+-+    const dimensionedScalar targetMass
+-     (
+--        "initialMass",
+-+        "targetMass",
+-         dimMass,
+--        initialMassFluid[i]
+-+        targetMassFluid[i]
+-     );
+- 
+-     bool frozenFlow = frozenFlowFluid[i];
+-+    bool solveSpecies = solveSpeciesFluid[i];
+-+    bool solveEnergy = solveEnergyFluid[i];
+- 
+-     const label pRefCell = pRefCellFluid[i];
+-     const scalar pRefValue = pRefValueFluid[i];
+---- /mnt/data/cht/chtMultiRegionFoam/fluid/solveFluid.H	2026-09-03 09:32:01.000000000 +0000
+-+++ /mnt/data/chtReactingNanoParcelFoam/fluid/solveFluid.H	2026-09-03 10:00:58.518112155 +0000
+-@@ -5,7 +5,32 @@
+- 
+- if (frozenFlow)
+- {
+--    #include "EEqn.H"
+-+    // Fixed carrier velocity/pressure mode.  Unlike the stock CHT solver,
+-+    // retain reactingNanoParcelFoam capability to advance species and energy.
+-+    if (oCorr == 0 && solveSpecies)
+-+    {
+-+        #include "rhoEqn.H"
+-+    }
+-+
+-+    if (solveSpecies)
+-+    {
+-+        #include "YEqn.H"
+-+    }
+-+
+-+    if (solveEnergy)
+-+    {
+-+        if (!solveSpecies)
+-+        {
+-+            reaction.correct();
+-+            Qdot = reaction.Qdot();
+-+        }
+-+        #include "EEqn.H"
+-+    }
+-+
+-+    if (!coupled)
+-+    {
+-+        rho = thermo.rho();
+-+    }
+- }
+- else
+- {
+-@@ -15,8 +40,21 @@
+-     }
+- 
+-     #include "UEqn.H"
+--    #include "YEqn.H"
+--    #include "EEqn.H"
+-+
+-+    if (solveSpecies)
+-+    {
+-+        #include "YEqn.H"
+-+    }
+-+
+-+    if (solveEnergy)
+-+    {
+-+        if (!solveSpecies)
+-+        {
+-+            reaction.correct();
+-+            Qdot = reaction.Qdot();
+-+        }
+-+        #include "EEqn.H"
+-+    }
+- 
+-     if (!coupled)
+-     {
+-@@ -34,6 +72,13 @@
+-     }
+- }
+- 
+-+if (coupled && !solveEnergy)
+-+{
+-+    FatalErrorInFunction
+-+        << "Energy-coupled CHT requires solveEnergy true in fluid region "
+-+        << fluidRegions[i].name() << exit(FatalError);
+-+}
+-+
+- if (finalIter)
+- {
+-     mesh.data().setFinalIteration(false);
+---- /mnt/data/cht/chtMultiRegionFoam/fluid/UEqn.H	2026-09-03 09:32:01.000000000 +0000
+-+++ /mnt/data/chtReactingNanoParcelFoam/fluid/UEqn.H	2026-09-03 09:54:42.061163610 +0000
+-@@ -8,7 +8,8 @@
+-       + MRF.DDt(rho, U)
+-       + turbulence.divDevRhoReff(U)
+-      ==
+--        fvOptions(rho, U)
+-+        parcels.SU(U)
+-+      + fvOptions(rho, U)
+-     );
+- 
+-     UEqn.relax();
+---- /mnt/data/cht/chtMultiRegionFoam/fluid/YEqn.H	2026-09-03 09:32:01.000000000 +0000
+-+++ /mnt/data/chtReactingNanoParcelFoam/fluid/YEqn.H	2026-09-03 09:54:42.061382140 +0000
+-@@ -36,7 +36,9 @@
+-               + mvConvection->fvmDiv(phi, Yi)
+-               - fvm::laplacian(turbulence.muEff(), Yi)
+-              ==
+--                reaction.R(Yi)
+-+                parcels.SYi(i, Yi)
+-+              + surfaceFilm.Srho(i)
+-+              + reaction.R(Yi)
+-               + fvOptions(rho, Yi)
+-             );
+- 
+---- /mnt/data/cht/chtMultiRegionFoam/fluid/EEqn.H	2026-09-03 09:32:01.000000000 +0000
+-+++ /mnt/data/chtReactingNanoParcelFoam/fluid/EEqn.H	2026-09-03 09:54:42.061453538 +0000
+-@@ -18,6 +18,8 @@
+-       - fvm::laplacian(turbulence.alphaEff(), he)
+-      ==
+-         rho*(U&g)
+-+      + parcels.Sh(he)
+-+      + surfaceFilm.Sh()
+-       + rad.Sh(thermo, he)
+-       + Qdot
+-       + fvOptions(rho, he)
+---- /mnt/data/cht/chtMultiRegionFoam/fluid/pEqn.H	2026-09-03 09:32:01.000000000 +0000
+-+++ /mnt/data/chtReactingNanoParcelFoam/fluid/pEqn.H	2026-09-03 09:56:29.837533766 +0000
+-@@ -34,6 +34,10 @@
+-     (
+-         fvc::ddt(rho) + psi*correction(fvm::ddt(p_rgh))
+-       + fvc::div(phiHbyA)
+-+     ==
+-+        parcels.Srho()
+-+      + surfaceFilm.Srho()
+-+      + fvOptions(psi, p_rgh, rho.name())
+-     );
+- 
+-     for (int nonOrth=0; nonOrth<=nNonOrthCorr; nonOrth++)
+-@@ -97,7 +101,7 @@
+-     }
+-     else
+-     {
+--        p += (initialMass - fvc::domainIntegrate(psi*p))
+-+        p += (targetMass - fvc::domainIntegrate(psi*p))
+-             /compressibility;
+-         thermo.correctRho(psi*p - psip0, rhoMin, rhoMax);
+-         rho = thermo.rho();
+---- /mnt/data/cht/chtMultiRegionFoam/include/setMultiRegionDeltaT.H	2026-09-03 09:32:01.000000000 +0000
+-+++ /mnt/data/chtReactingNanoParcelFoam/include/setMultiRegionDeltaT.H	2026-09-03 09:54:51.417409823 +0000
+-@@ -45,7 +45,11 @@
+-         DiNum = SMALL;
+-     }
+- 
+--    scalar maxDeltaTFluid = maxCo/(CoNum + SMALL);
+-+    scalar maxDeltaTFluid = min
+-+    (
+-+        maxCo/(CoNum + SMALL),
+-+        maxCo/(filmCoNum + SMALL)
+-+    );
+-     scalar maxDeltaTSolid = maxDi/(DiNum + SMALL);
+- 
+-     scalar deltaTFluid =
+---- /mnt/data/cht/chtMultiRegionFoam/include/setInitialMultiRegionDeltaT.H	2026-09-03 09:32:01.000000000 +0000
+-+++ /mnt/data/chtReactingNanoParcelFoam/include/setInitialMultiRegionDeltaT.H	2026-09-03 09:54:51.417543194 +0000
+-@@ -49,7 +49,11 @@
+-         (
+-             min
+-             (
+--                min(maxCo/CoNum, maxDi/DiNum)*runTime.deltaTValue(),
+-+                min
+-+                (
+-+                    min(maxCo/CoNum, maxCo/(filmCoNum + SMALL)),
+-+                    maxDi/DiNum
+-+                )*runTime.deltaTValue(),
+-                 min(runTime.deltaTValue(), maxDeltaT)
+-             )
+-         );
+---- /dev/null	2026-09-03 09:33:43.612744471 +0000
+-+++ /mnt/data/chtReactingNanoParcelFoam/fluid/rhoEqn.H	2026-09-03 09:54:42.061868275 +0000
+-@@ -0,0 +1,18 @@
+-+/*---------------------------------------------------------------------------*\
+-+  Continuity equation with reacting parcel and surface-film mass sources.
+-+\*---------------------------------------------------------------------------*/
+-+
+-+{
+-+    fvScalarMatrix rhoEqn
+-+    (
+-+        fvm::ddt(rho)
+-+      + fvc::div(phi)
+-+     ==
+-+        parcels.Srho(rho)
+-+      + surfaceFilm.Srho()
+-+      + fvOptions(rho)
+-+    );
+-+
+-+    rhoEqn.solve();
+-+    fvOptions.correct(rho);
+-+}
+---- /dev/null	2026-09-03 09:33:43.612744471 +0000
+-+++ /mnt/data/chtReactingNanoParcelFoam/include/surfaceFilmMultiRegionCourantNo.H	2026-09-03 09:54:50.949848322 +0000
+-@@ -0,0 +1,14 @@
+-+/*---------------------------------------------------------------------------*\
+-+  Maximum surface-film Courant number across all fluid regions.
+-+\*---------------------------------------------------------------------------*/
+-+
+-+scalar filmCoNum = -GREAT;
+-+forAll(surfaceFilmFluid, regionI)
+-+{
+-+    filmCoNum = max(filmCoNum, surfaceFilmFluid[regionI].CourantNumber());
+-+}
+-+
+-+if (filmCoNum == -GREAT)
+-+{
+-+    filmCoNum = SMALL;
+-+}
+---- /dev/null	2026-09-03 09:33:43.612744471 +0000
+-+++ /mnt/data/chtReactingNanoParcelFoam/Allwmake	2026-09-03 09:53:54.077169083 +0000
+-@@ -0,0 +1,13 @@
+-+#!/bin/sh
+-+cd "${0%/*}" || exit 1
+-+
+-+: "${WM_PROJECT_DIR:?OpenFOAM environment is not loaded. Run the OpenFOAM-v2406 bashrc first.}"
+-+
+-+echo "Building custom Lagrangian libraries..."
+-+wmake libso lagrangian/distributionModels || exit 1
+-+wmake libso lagrangian/basic || exit 1
+-+wmake libso lagrangian/intermediate || exit 1
+-+wmake libso lagrangian/turbulence || exit 1
+-+
+-+echo "Building chtReactingNanoParcelFoam..."
+-+wmake || exit 1
+---- /dev/null	2026-09-03 09:33:43.612744471 +0000
+-+++ /mnt/data/chtReactingNanoParcelFoam/Allwclean	2026-09-03 09:53:54.078826859 +0000
+-@@ -0,0 +1,7 @@
+-+#!/bin/sh
+-+cd "${0%/*}" || exit 1
+-+wclean lagrangian/turbulence
+-+wclean lagrangian/intermediate
+-+wclean lagrangian/basic
+-+wclean lagrangian/distributionModels
+-+wclean
+---- /dev/null	2026-09-03 09:33:43.612744471 +0000
+-+++ /mnt/data/chtReactingNanoParcelFoam/README.md	2026-09-03 09:59:27.601541452 +0000
+-@@ -0,0 +1,145 @@
+-+# chtReactingNanoParcelFoam (OpenFOAM-v2406)
+-+
+-+This solver merges the uploaded `chtMultiRegionFoam` with the uploaded
+-+`reactingNanoParcelFoam` Lagrangian implementation.
+-+
+-+## What is coupled
+-+
+-+For every fluid region, the solver constructs:
+-+
+-+- `rhoReactionThermo`
+-+- `SLGThermo`
+-+- one `basicReactingTypeCloud` named `reactingCloud1`
+-+- one Eulerian `surfaceFilmModel`
+-+
+-+The parcel cloud is advanced **once per physical time step**, before the
+-+PIMPLE/CHT outer iterations. Its source terms are then reused while the
+-+Eulerian equations and fluid-solid heat transfer converge at that time level.
+-+
+-+Parcel/film source terms included in the carrier equations:
+-+
+-+- continuity: `parcels.Srho(rho)` and `surfaceFilm.Srho()`
+-+- pressure/continuity correction: `parcels.Srho()` and `surfaceFilm.Srho()`
+-+- momentum: `parcels.SU(U)`
+-+- species: `parcels.SYi(i,Yi)` and `surfaceFilm.Srho(i)`
+-+- energy: `parcels.Sh(he)` and `surfaceFilm.Sh()`
+-+
+-+The original CHT energy matrix assembly is retained, so parcel enthalpy source
+-+terms participate directly in conjugate fluid-solid energy coupling.
+-+
+-+## Preserved split-solve controls
+-+
+-+Under `PIMPLE` in each fluid region's `fvSolution`:
+-+
+-+```text
+-+solveFlow      true;   // optional; if present, overrides frozenFlow
+-+solveSpecies   true;   // default true
+-+solveEnergy    true;   // default true
+-+```
+-+
+-+`solveFlow false` maps to frozen-flow operation, but unlike stock
+-+`chtMultiRegionFoam`, species can still be advanced. This preserves the useful
+-+behaviour of the uploaded `reactingNanoParcelFoam` for fixed-flow scalar and
+-+thermal calculations.
+-+
+-+For energy-coupled CHT, `solveEnergy` must be `true`.
+-+
+-+## Surface film when you do not use a film
+-+
+-+The Eulerian surface-film framework is retained because the uploaded nano
+-+solver couples its mass/species/energy source terms. OpenFOAM's `none` model
+-+can be used when no film is required.
+-+
+-+For each fluid region, create `constant/<fluidRegion>/surfaceFilmProperties`
+-+with at least:
+-+
+-+```text
+-+FoamFile
+-+{
+-+    format      ascii;
+-+    class       dictionary;
+-+    object      surfaceFilmProperties;
+-+}
+-+
+-+surfaceFilmModel none;
+-+```
+-+
+-+The Lagrangian cloud's own `surfaceFilmModel` in
+-+`reactingCloud1Properties` can likewise remain `none` when not used.
+-+
+-+## Cloud properties location
+-+
+-+Because this is a multi-region solver, each fluid region is its own object
+-+registry. The `reactingCloud1` dictionary and any fields used by custom parcel
+-+forces should therefore belong to that fluid region, e.g.
+-+
+-+```text
+-+constant/<fluidRegion>/reactingCloud1Properties
+-+```
+-+
+-+and fields such as an electric field used by `CoulombForce` should be placed
+-+in the corresponding region time directory.
+-+
+-+## Closed-volume mass handling
+-+
+-+Stock `chtMultiRegionFoam` fixes the absolute pressure level of a closed fluid
+-+region using the initial carrier-gas mass. That is inconsistent when parcels
+-+or a film transfer mass to/from the gas.
+-+
+-+This merged solver therefore maintains `targetMassFluid`. Once per physical
+-+time step it updates the target carrier mass with the volume-integrated
+-+`parcels.Srho()` and `surfaceFilm.Srho()` sources. The closed-volume pressure
+-+correction uses this updated target mass.
+-+
+-+## Build
+-+
+-+Load the OpenFOAM-v2406 environment first, then from this directory:
+-+
+-+```bash
+-+./Allwmake
+-+```
+-+
+-+The script builds the bundled modified Lagrangian libraries first and then:
+-+
+-+```text
+-+$FOAM_USER_APPBIN/chtReactingNanoParcelFoam
+-+```
+-+
+-+To clean:
+-+
+-+```bash
+-+./Allwclean
+-+```
+-+
+-+## Recommended first validation
+-+
+-+Do not start with the final T-junction case. Validate in this order:
+-+
+-+1. **CHT only / no parcels**
+-+   - no parcel injection
+-+   - `surfaceFilmModel none`
+-+   - compare `U`, `p`, `T` and solid `T` against stock `chtMultiRegionFoam`.
+-+
+-+2. **One-way parcels**
+-+   - set the cloud solution to uncoupled
+-+   - verify trajectories against `reactingNanoParcelFoam` using the same
+-+     carrier fields.
+-+
+-+3. **Two-way parcel sources**
+-+   - enable cloud coupling
+-+   - check integrated carrier + parcel mass and energy balances.
+-+
+-+4. **Final T-junction CHT + supersaturation problem**
+-+   - activate wall heating/cooling and the required vapour species.
+-+
+-+## Important scope
+-+
+-+This version uses the static multi-region mesh architecture of the supplied
+-+`chtMultiRegionFoam`. The uploaded `reactingNanoParcelFoam` dynamic-mesh
+-+operations are **not** transplanted into the multi-region solver. For the
+-+static T-shaped mixer discussed in this project this is intentional.
+-+
+-+All custom Lagrangian source directories needed by the uploaded nano solver
+-+are bundled (`distributionModels`, `basic`, `intermediate`, `turbulence`).
+-+Generated `lnInclude` links and old object files are intentionally omitted;
+-+`wmake` regenerates them on Linux.
+---- /dev/null	2026-09-03 09:33:43.612744471 +0000
+-+++ /mnt/data/chtReactingNanoParcelFoam/PREFLIGHT.sh	2026-09-03 10:03:17.848616520 +0000
+-@@ -0,0 +1,28 @@
+-+#!/bin/sh
+-+set -eu
+-+cd "${0%/*}" || exit 1
+-+
+-+if [ -z "${WM_PROJECT_DIR:-}" ]; then
+-+    echo "ERROR: OpenFOAM environment is not loaded."
+-+    exit 1
+-+fi
+-+
+-+if ! command -v wmake >/dev/null 2>&1; then
+-+    echo "ERROR: wmake is not on PATH."
+-+    exit 1
+-+fi
+-+
+-+case "${WM_PROJECT_VERSION:-unknown}" in
+-+    *2406*) echo "OpenFOAM version: ${WM_PROJECT_VERSION}" ;;
+-+    *) echo "WARNING: designed from OpenFOAM-v2406 sources; current version is ${WM_PROJECT_VERSION:-unknown}." ;;
+-+esac
+-+
+-+for f in \
+-+    lagrangian/intermediate/submodels/Reacting/PhaseChangeModel/LiquidEvapFuchsKnudsen/LiquidEvapFuchsKnudsen.C \
+-+    lagrangian/intermediate/submodels/Kinematic/ParticleForces/Coulomb/CoulombForce.C \
+-+    lagrangian/turbulence/submodels/Thermodynamic/ParticleForces/BrownianMotion/BrownianMotionForce.C
+-+ do
+-+    test -s "$f" || { echo "ERROR: missing/non-readable $f"; exit 1; }
+-+ done
+-+
+-+echo "Source-tree preflight passed."
+---- /dev/null	2026-09-03 09:33:43.612744471 +0000
+-+++ /mnt/data/chtReactingNanoParcelFoam/verifyIntegration.py	2026-09-03 10:00:04.764807829 +0000
+-@@ -0,0 +1,34 @@
+-+#!/usr/bin/env python3
+-+from pathlib import Path
+-+import sys
+-+
+-+root = Path(__file__).resolve().parent
+-+checks = {
+-+    "per-region cloud list": "PtrList<basicReactingTypeCloud> parcelsFluid" in (root/"fluid/createFluidFields.H").read_text(),
+-+    "per-region SLGThermo": "PtrList<SLGThermo> slgThermoFluid" in (root/"fluid/createFluidFields.H").read_text(),
+-+    "parcel evolve before PIMPLE": (root/"chtReactingNanoParcelFoam.C").read_text().index("parcelsFluid[i].evolve()") < (root/"chtReactingNanoParcelFoam.C").read_text().index("// --- PIMPLE loop"),
+-+    "momentum coupling": "parcels.SU(U)" in (root/"fluid/UEqn.H").read_text(),
+-+    "species coupling": "parcels.SYi(i, Yi)" in (root/"fluid/YEqn.H").read_text(),
+-+    "energy coupling": "parcels.Sh(he)" in (root/"fluid/EEqn.H").read_text(),
+-+    "mass coupling in rho": "parcels.Srho(rho)" in (root/"fluid/rhoEqn.H").read_text(),
+-+    "mass coupling in p": "parcels.Srho()" in (root/"fluid/pEqn.H").read_text(),
+-+    "CHT matrix assembly retained": "fvMatrixAssemblyPtr->addFvMatrix(EEqn)" in (root/"fluid/EEqn.H").read_text(),
+-+    "closed-volume target mass": "targetMassFluid[i] +=" in (root/"chtReactingNanoParcelFoam.C").read_text(),
+-+    "split solve controls": "solveSpeciesFluid" in (root/"fluid/createFluidFields.H").read_text(),
+-+}
+-+
+-+for name, ok in checks.items():
+-+    print(f"{'PASS' if ok else 'FAIL'}  {name}")
+-+
+-+models = [
+-+    "lagrangian/intermediate/submodels/Reacting/PhaseChangeModel/LiquidEvapFuchsKnudsen/LiquidEvapFuchsKnudsen.C",
+-+    "lagrangian/intermediate/submodels/Kinematic/ParticleForces/Coulomb/CoulombForce.C",
+-+    "lagrangian/turbulence/submodels/Thermodynamic/ParticleForces/BrownianMotion/BrownianMotionForce.C",
+-+]
+-+for rel in models:
+-+    p = root/rel
+-+    ok = p.is_file() and p.stat().st_size > 0
+-+    checks[rel] = ok
+-+    print(f"{'PASS' if ok else 'FAIL'}  {rel}")
+-+
+-+sys.exit(0 if all(checks.values()) else 1)
+---- /mnt/data/cht/chtMultiRegionFoam/chtMultiRegionFoam.C	2026-09-03 09:32:00.000000000 +0000
+-+++ /mnt/data/chtReactingNanoParcelFoam/chtReactingNanoParcelFoam.C	2026-09-03 10:02:53.211179300 +0000
+-@@ -25,17 +25,19 @@
+-     along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
+- 
+- Application
+--    chtMultiRegionFoam
+-+    chtReactingNanoParcelFoam
+- 
+- Group
+-     grpHeatTransferSolvers
+- 
+- Description
+--    Transient solver for buoyant, turbulent fluid flow and solid heat
+--    conduction with conjugate heat transfer between solid and fluid regions.
+--
+--    It handles secondary fluid or solid circuits which can be coupled
+--    thermally with the main fluid region. i.e radiators, etc.
+-+    Transient multi-region solver for compressible reacting fluid flow,
+-+    solid heat conduction and conjugate heat transfer, augmented with the
+-+    reactingNanoParcelFoam Lagrangian reacting-multiphase cloud models.
+-+
+-+    Each fluid region owns an independent reacting cloud and optional surface
+-+    film. Parcel-to-carrier mass, species, momentum and enthalpy source terms
+-+    are coupled to the Eulerian equations.
+- 
+- \*---------------------------------------------------------------------------*/
+- 
+-@@ -53,6 +55,17 @@
+- #include "coordinateSystem.H"
+- #include "loopControl.H"
+- #include "pressureControl.H"
+-+#include "surfaceFilmModel.H"
+-+#include "SLGThermo.H"
+-+#include "cloudMacros.H"
+-+
+-+#ifndef CLOUD_BASE_TYPE
+-+    #define CLOUD_BASE_TYPE ReactingMultiphase
+-+    #define CLOUD_BASE_TYPE_NAME "reacting"
+-+#endif
+-+
+-+#include CLOUD_INCLUDE_FILE(CLOUD_BASE_TYPE)
+-+#define basicReactingTypeCloud CLOUD_TYPE(CLOUD_BASE_TYPE)
+- 
+- 
+- // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+-@@ -61,9 +74,8 @@
+- {
+-     argList::addNote
+-     (
+--        "Transient solver for buoyant, turbulent fluid flow and solid heat"
+--        " conduction with conjugate heat transfer"
+--        " between solid and fluid regions."
+-+        "Transient multi-region CHT solver with reacting nano parcel clouds"
+-+        " in each fluid region."
+-     );
+- 
+-     #define NO_CONTROL
+-@@ -80,6 +92,7 @@
+-     #include "readSolidTimeControls.H"
+-     #include "compressibleMultiRegionCourantNo.H"
+-     #include "solidRegionDiffusionNo.H"
+-+    #include "surfaceFilmMultiRegionCourantNo.H"
+-     #include "setInitialMultiRegionDeltaT.H"
+- 
+-     #include "createCoupledRegions.H"
+-@@ -92,12 +105,34 @@
+- 
+-         #include "compressibleMultiRegionCourantNo.H"
+-         #include "solidRegionDiffusionNo.H"
+-+        #include "surfaceFilmMultiRegionCourantNo.H"
+-         #include "setMultiRegionDeltaT.H"
+- 
+-         ++runTime;
+- 
+-         Info<< "Time = " << runTime.timeName() << nl << endl;
+- 
+-+        // Advance each Lagrangian cloud exactly once per physical time step.
+-+        // The resulting source terms are reused during PIMPLE/CHT iterations.
+-+        forAll(fluidRegions, i)
+-+        {
+-+            Info<< "\nEvolving reacting nano parcels in fluid region "
+-+                << fluidRegions[i].name() << endl;
+-+            parcelsFluid[i].evolve();
+-+            surfaceFilmFluid[i].evolve();
+-+
+-+            // For closed fluid regions, parcel evaporation/condensation and
+-+            // film transfer change the carrier-phase mass that fixes the
+-+            // absolute pressure level. Accumulate that physical mass change
+-+            // once per time step (source units: kg/m3/s).
+-+            targetMassFluid[i] +=
+-+                runTime.deltaTValue()
+-+               *(
+-+                    fvc::domainIntegrate(parcelsFluid[i].Srho()).value()
+-+                  + fvc::domainIntegrate(surfaceFilmFluid[i].Srho()).value()
+-+                );
+-+        }
+-+
+-         if (nOuterCorr != 1)
+-         {
+-             forAll(fluidRegions, i)
+-@@ -178,7 +213,10 @@
+-                             << fluidRegions[i].name() << endl;
+-                         #include "readFluidMultiRegionPIMPLEControls.H"
+-                         #include "setRegionFluidFields.H"
+-+                        // This loop is the stock CHT energy-only correction,
+-+                        // not the user-requested frozen-flow scalar mode.
+-                         frozenFlow = true;
+-+                        solveSpecies = false;
+-                         #include "solveFluid.H"
+-                     }
+- 
+diff -ruN review_solver/chtReactingNanoParcelFoam/README.md chtReactingNanoParcelFoam_reviewed/README.md
+--- review_solver/chtReactingNanoParcelFoam/README.md	2026-09-03 09:59:27.000000000 +0000
++++ chtReactingNanoParcelFoam_reviewed/README.md	2026-09-07 01:44:20.583304929 +0000
+@@ -5,16 +5,15 @@
+ 
+ ## What is coupled
+ 
+-For every fluid region, the solver constructs:
+-
+-- `rhoReactionThermo`
+-- `SLGThermo`
+-- one `basicReactingTypeCloud` named `reactingCloud1`
+-- one Eulerian `surfaceFilmModel`
+-
+-The parcel cloud is advanced **once per physical time step**, before the
+-PIMPLE/CHT outer iterations. Its source terms are then reused while the
+-Eulerian equations and fluid-solid heat transfer converge at that time level.
++For every fluid region, the solver always constructs the carrier
++`rhoReactionThermo` and Eulerian `surfaceFilmModel`. `SLGThermo` and the
++`basicReactingTypeCloud` named `reactingCloud1` are constructed **only when**
++`solveParcels true`.
++
++In transient mode an enabled parcel cloud is advanced **once per physical time
++step**, before the PIMPLE/CHT outer iterations. Its source terms are then reused
++while the Eulerian equations and fluid-solid heat transfer converge at that
++time level. In steady carrier mode parcels are required to be disabled.
+ 
+ Parcel/film source terms included in the carrier equations:
+ 
+@@ -35,6 +34,7 @@
+ solveFlow      true;   // optional; if present, overrides frozenFlow
+ solveSpecies   true;   // default true
+ solveEnergy    true;   // default true
++solveParcels   false;  // startup-only switch; false for steady carrier/CHT
+ ```
+ 
+ `solveFlow false` maps to frozen-flow operation, but unlike stock
+@@ -143,3 +143,64 @@
+ are bundled (`distributionModels`, `basic`, `intermediate`, `turbulence`).
+ Generated `lnInclude` links and old object files are intentionally omitted;
+ `wmake` regenerates them on Linux.
++
++## 2026-09-07: steady-state / solveParcels controls
++
++This reviewed version supports two deliberately separated operating modes.
++
++### A. Steady carrier + species + CHT (recommended for obtaining a converged field)
++
++Use `steadyState` as the **default ddt scheme in every fluid and solid region** and set, in each fluid-region `fvSolution`:
++
++```text
++PIMPLE
++{
++    nOuterCorrectors          3;
++    nCorrectors               1;
++    nNonOrthogonalCorrectors  0;
++
++    solveFlow       true;
++    solveSpecies    true;
++    solveEnergy     true;
++    solveParcels    false;
++}
++```
++
++In this mode:
++
++- `SLGThermo` and `reactingCloud1` are not constructed;
++- no parcel dictionary/submodel is read;
++- no `parcels.evolve()` occurs;
++- parcel `SU`, `SYi`, `Sh`, `Srho` sources are absent;
++- the transient `rhoEqn` is not solved;
++- a steady pressure correction adapted from the v2406
++  `chtMultiRegionSimpleFoam` pressure equation is used;
++- Courant/Diffusion based physical-time step adjustment is skipped.
++
++For a convenient iteration counter use, for example, `deltaT 1` and
++`adjustTimeStep no` in `controlDict`. In steady mode the Time value is an
++iteration/pseudo-time label, not physical residence time.
++
++### B. Transient carrier + reacting nano parcels
++
++Use a transient ddt scheme (`Euler`, `backward`, etc.) in all regions and set
++`solveParcels true`. The original two-way parcel source coupling is retained.
++
++`solveParcels` is a startup-only switch. Restart the solver to change it.
++This avoids constructing/destructing the cloud dynamically in the middle of a
++run.
++
++### C. Recommended two-stage workflow
++
++1. Run Mode A to convergence.
++2. Copy/restart from the converged carrier/solid fields.
++3. Change all regions to a transient ddt scheme, set `solveParcels true`, and
++   if desired set `solveFlow/solveSpecies/solveEnergy` according to the desired
++   one-way/two-way coupling strategy.
++
++### Pure-water Fuchs-Knudsen phase change
++
++The supplied `LiquidEvapFuchsKnudsen.C` also contains the previously required
++pure-liquid correction. `solution (H2O);` is valid and no longer dereferences a
++non-existent second (solid) component. A two-component `(liquid solid)`
++solution remains supported.
+diff -ruN review_solver/chtReactingNanoParcelFoam/REVIEW_NOTES_20260907.md chtReactingNanoParcelFoam_reviewed/REVIEW_NOTES_20260907.md
+--- review_solver/chtReactingNanoParcelFoam/REVIEW_NOTES_20260907.md	1970-01-01 00:00:00.000000000 +0000
++++ chtReactingNanoParcelFoam_reviewed/REVIEW_NOTES_20260907.md	2026-09-07 01:43:51.041050141 +0000
+@@ -0,0 +1,53 @@
++# Full review notes — 2026-09-07
++
++Reviewed against the uploaded full `chtReactingNanoParcelFoam` tree and the
++OpenFOAM-v2406 `chtMultiRegionFoam` / `chtMultiRegionSimpleFoam` structure.
++
++## Corrected issues
++
++1. `parcelsFluid[i].evolve()` was unconditional in the main solver.
++2. `SLGThermo` and the reacting cloud were always constructed, even when a
++   steady carrier-only calculation was desired.
++3. Parcel sources (`SU`, `SYi`, `Sh`, `Srho`) were unconditional in Eulerian
++   equations.
++4. The transient density equation `rhoEqn` was still solved with
++   `default steadyState`; its `fvm::ddt(rho)` then has no transient diagonal.
++5. The transient PIMPLE pressure equation was being reused blindly for a
++   steady-state run. A separate steady pressure correction based on v2406
++   `chtMultiRegionSimpleFoam/fluid/pEqn.H` was added.
++6. `solveFlow`, `solveSpecies` and `solveEnergy` were only partly re-read from
++   region `fvSolution`; the runtime controls are now consistent.
++7. `solveParcels` is now read from each fluid region's `PIMPLE` dictionary and
++   is intentionally startup-only.
++8. Mixed default steady/transient ddt modes across CHT regions now stop with a
++   clear error instead of producing an inconsistent multi-region solve.
++9. Physical-time Courant/Diffusion timestep adjustment and Lagrangian evolve
++   are skipped in steady carrier mode.
++10. The uploaded archive had regressed to the original
++    `LiquidEvapFuchsKnudsen` one-element `solution` bug. The pure-liquid fix was
++    restored.
++
++## Deliberate limitation
++
++`solveParcels=true` with a `steadyState` carrier is rejected. OpenFOAM has a
++steady cloud-tracking mode, but combining that with this custom reacting-nano
++source coupling requires a separate, carefully defined steady Lagrangian
++algorithm. The supported and recommended workflow is steady carrier/CHT first,
++then a transient parcel restart.
++
++## Files changed
++
++- `chtReactingNanoParcelFoam.C`
++- `fluid/createFluidFields.H`
++- `fluid/setRegionFluidFields.H`
++- `fluid/readFluidMultiRegionPIMPLEControls.H`
++- `fluid/solveFluid.H`
++- `fluid/UEqn.H`
++- `fluid/YEqn.H`
++- `fluid/EEqn.H`
++- `fluid/rhoEqn.H`
++- `fluid/pEqn.H`
++- `fluid/pEqnSteady.H` (new)
++- `lagrangian/intermediate/submodels/Reacting/PhaseChangeModel/LiquidEvapFuchsKnudsen/LiquidEvapFuchsKnudsen.C`
++- `verifyIntegration.py`
++- `README.md`
+Binary files review_solver/chtReactingNanoParcelFoam/__pycache__/verifyIntegration.cpython-313.pyc and chtReactingNanoParcelFoam_reviewed/__pycache__/verifyIntegration.cpython-313.pyc differ
+diff -ruN review_solver/chtReactingNanoParcelFoam/chtReactingNanoParcelFoam.C chtReactingNanoParcelFoam_reviewed/chtReactingNanoParcelFoam.C
+--- review_solver/chtReactingNanoParcelFoam/chtReactingNanoParcelFoam.C	2026-09-03 10:02:53.000000000 +0000
++++ chtReactingNanoParcelFoam_reviewed/chtReactingNanoParcelFoam.C	2026-09-07 01:42:53.326768602 +0000
+@@ -74,8 +74,9 @@
+ {
+     argList::addNote
+     (
+-        "Transient multi-region CHT solver with reacting nano parcel clouds"
+-        " in each fluid region."
++        "Multi-region reacting CHT solver with optional reacting nano parcel"
++        " clouds. Supports transient carrier/parcel operation and steady"
++        " carrier/CHT operation with solveParcels=false."
+     );
+ 
+     #define NO_CONTROL
+@@ -90,10 +91,44 @@
+     #include "initContinuityErrs.H"
+     #include "createTimeControls.H"
+     #include "readSolidTimeControls.H"
+-    #include "compressibleMultiRegionCourantNo.H"
+-    #include "solidRegionDiffusionNo.H"
+-    #include "surfaceFilmMultiRegionCourantNo.H"
+-    #include "setInitialMultiRegionDeltaT.H"
++
++    // All regions participating in one CHT solve must use the same default
++    // time character (steadyState or transient).
++    bool steadyRun = true;
++    bool transientRun = true;
++
++    forAll(fluidRegions, regionI)
++    {
++        steadyRun = steadyRun && fluidRegions[regionI].steady();
++        transientRun = transientRun && fluidRegions[regionI].transient();
++    }
++    forAll(solidRegions, regionI)
++    {
++        steadyRun = steadyRun && solidRegions[regionI].steady();
++        transientRun = transientRun && solidRegions[regionI].transient();
++    }
++
++    if (!steadyRun && !transientRun)
++    {
++        FatalErrorInFunction
++            << "Mixed steady/transient default ddtSchemes across CHT regions "
++            << "are not supported. Use steadyState for all regions or a "
++            << "transient ddt scheme for all regions." << exit(FatalError);
++    }
++
++    if (transientRun)
++    {
++        #include "compressibleMultiRegionCourantNo.H"
++        #include "solidRegionDiffusionNo.H"
++        #include "surfaceFilmMultiRegionCourantNo.H"
++        #include "setInitialMultiRegionDeltaT.H"
++    }
++    else
++    {
++        Info<< "Steady-state carrier/CHT mode detected (steadyState ddt)."
++            << nl << "Courant/Diffusion based deltaT adjustment and physical-"
++            << "time Lagrangian evolution are disabled." << nl << endl;
++    }
+ 
+     #include "createCoupledRegions.H"
+ 
+@@ -103,34 +138,47 @@
+         #include "readSolidTimeControls.H"
+         #include "readPIMPLEControls.H"
+ 
+-        #include "compressibleMultiRegionCourantNo.H"
+-        #include "solidRegionDiffusionNo.H"
+-        #include "surfaceFilmMultiRegionCourantNo.H"
+-        #include "setMultiRegionDeltaT.H"
++        if (transientRun)
++        {
++            #include "compressibleMultiRegionCourantNo.H"
++            #include "solidRegionDiffusionNo.H"
++            #include "surfaceFilmMultiRegionCourantNo.H"
++            #include "setMultiRegionDeltaT.H"
++        }
+ 
+         ++runTime;
+ 
+         Info<< "Time = " << runTime.timeName() << nl << endl;
+ 
+-        // Advance each Lagrangian cloud exactly once per physical time step.
+-        // The resulting source terms are reused during PIMPLE/CHT iterations.
+-        forAll(fluidRegions, i)
++        // Lagrangian and surface-film evolution is physical-time evolution.
++        // It is therefore executed only in transient carrier mode.
++        if (transientRun)
+         {
+-            Info<< "\nEvolving reacting nano parcels in fluid region "
+-                << fluidRegions[i].name() << endl;
+-            parcelsFluid[i].evolve();
+-            surfaceFilmFluid[i].evolve();
+-
+-            // For closed fluid regions, parcel evaporation/condensation and
+-            // film transfer change the carrier-phase mass that fixes the
+-            // absolute pressure level. Accumulate that physical mass change
+-            // once per time step (source units: kg/m3/s).
+-            targetMassFluid[i] +=
+-                runTime.deltaTValue()
+-               *(
+-                    fvc::domainIntegrate(parcelsFluid[i].Srho()).value()
+-                  + fvc::domainIntegrate(surfaceFilmFluid[i].Srho()).value()
+-                );
++            forAll(fluidRegions, i)
++            {
++                if (solveParcelsFluid[i])
++                {
++                    Info<< "\nEvolving reacting nano parcels in fluid region "
++                        << fluidRegions[i].name() << endl;
++                    parcelsFluid[i].evolve();
++                }
++
++                surfaceFilmFluid[i].evolve();
++
++                scalar carrierMassRate =
++                    fvc::domainIntegrate(surfaceFilmFluid[i].Srho()).value();
++
++                if (solveParcelsFluid[i])
++                {
++                    carrierMassRate +=
++                        fvc::domainIntegrate(parcelsFluid[i].Srho()).value();
++                }
++
++                // Closed-volume pressure reference must follow physical mass
++                // transferred from parcels/film to the carrier.
++                targetMassFluid[i] +=
++                    runTime.deltaTValue()*carrierMassRate;
++            }
+         }
+ 
+         if (nOuterCorr != 1)
+@@ -183,7 +231,14 @@
+                         // --- PISO loop
+                         for (int corr=0; corr<nCorr; corr++)
+                         {
+-                            #include "pEqn.H"
++                            if (mesh.steady())
++                            {
++                                #include "pEqnSteady.H"
++                            }
++                            else
++                            {
++                                #include "pEqn.H"
++                            }
+                         }
+                         turbulence.correct();
+                     }
+diff -ruN review_solver/chtReactingNanoParcelFoam/fluid/EEqn.H chtReactingNanoParcelFoam_reviewed/fluid/EEqn.H
+--- review_solver/chtReactingNanoParcelFoam/fluid/EEqn.H	2026-09-03 09:54:42.000000000 +0000
++++ chtReactingNanoParcelFoam_reviewed/fluid/EEqn.H	2026-09-07 01:42:53.326369565 +0000
+@@ -18,13 +18,17 @@
+       - fvm::laplacian(turbulence.alphaEff(), he)
+      ==
+         rho*(U&g)
+-      + parcels.Sh(he)
+       + surfaceFilm.Sh()
+       + rad.Sh(thermo, he)
+       + Qdot
+       + fvOptions(rho, he)
+     );
+ 
++    if (solveParcels)
++    {
++        EEqn -= parcelsPtr->Sh(he);
++    }
++
+     EEqn.relax();
+ 
+     fvOptions.constrain(EEqn);
+diff -ruN review_solver/chtReactingNanoParcelFoam/fluid/UEqn.H chtReactingNanoParcelFoam_reviewed/fluid/UEqn.H
+--- review_solver/chtReactingNanoParcelFoam/fluid/UEqn.H	2026-09-03 09:54:42.000000000 +0000
++++ chtReactingNanoParcelFoam_reviewed/fluid/UEqn.H	2026-09-07 01:42:53.326280557 +0000
+@@ -8,10 +8,17 @@
+       + MRF.DDt(rho, U)
+       + turbulence.divDevRhoReff(U)
+      ==
+-        parcels.SU(U)
+-      + fvOptions(rho, U)
++        fvOptions(rho, U)
+     );
+ 
++    // SU(U) was on the RHS in reactingNanoParcelFoam.  fvMatrix stores the
++    // equation in residual form, so subtracting the returned matrix adds the
++    // same RHS contribution without ever dereferencing a disabled cloud.
++    if (solveParcels)
++    {
++        UEqn -= parcelsPtr->SU(U);
++    }
++
+     UEqn.relax();
+ 
+     fvOptions.constrain(UEqn);
+diff -ruN review_solver/chtReactingNanoParcelFoam/fluid/YEqn.H chtReactingNanoParcelFoam_reviewed/fluid/YEqn.H
+--- review_solver/chtReactingNanoParcelFoam/fluid/YEqn.H	2026-09-03 09:54:42.000000000 +0000
++++ chtReactingNanoParcelFoam_reviewed/fluid/YEqn.H	2026-09-07 01:42:53.326324878 +0000
+@@ -24,11 +24,11 @@
+         dimensionedScalar("Yt", dimless, 0)
+     );
+ 
+-    forAll(Y, i)
++    forAll(Y, specieI)
+     {
+-        if (i != inertIndex && composition.active(i))
++        if (specieI != inertIndex && composition.active(specieI))
+         {
+-            volScalarField& Yi = Y[i];
++            volScalarField& Yi = Y[specieI];
+ 
+             fvScalarMatrix YiEqn
+             (
+@@ -36,12 +36,16 @@
+               + mvConvection->fvmDiv(phi, Yi)
+               - fvm::laplacian(turbulence.muEff(), Yi)
+              ==
+-                parcels.SYi(i, Yi)
+-              + surfaceFilm.Srho(i)
++                surfaceFilm.Srho(specieI)
+               + reaction.R(Yi)
+               + fvOptions(rho, Yi)
+             );
+ 
++            if (solveParcels)
++            {
++                YiEqn -= parcelsPtr->SYi(specieI, Yi);
++            }
++
+             YiEqn.relax();
+ 
+             fvOptions.constrain(YiEqn);
+diff -ruN review_solver/chtReactingNanoParcelFoam/fluid/createFluidFields.H chtReactingNanoParcelFoam_reviewed/fluid/createFluidFields.H
+--- review_solver/chtReactingNanoParcelFoam/fluid/createFluidFields.H	2026-09-03 10:01:33.000000000 +0000
++++ chtReactingNanoParcelFoam_reviewed/fluid/createFluidFields.H	2026-09-07 01:43:23.834738775 +0000
+@@ -22,6 +22,7 @@
+ List<bool> frozenFlowFluid(fluidRegions.size(), false);
+ List<bool> solveSpeciesFluid(fluidRegions.size(), true);
+ List<bool> solveEnergyFluid(fluidRegions.size(), true);
++List<bool> solveParcelsFluid(fluidRegions.size(), true);
+ 
+ PtrList<IOMRFZoneList> MRFfluid(fluidRegions.size());
+ PtrList<fv::options> fluidFvOptions(fluidRegions.size());
+@@ -52,13 +53,6 @@
+     thermoFluid.set(i, rhoReactionThermo::New(fluidRegions[i]).ptr());
+     thermoFluid[i].validate(args.executable(), "h", "e");
+ 
+-    Info<< "    Adding to SLGThermo\n" << endl;
+-    slgThermoFluid.set
+-    (
+-        i,
+-        new SLGThermo(fluidRegions[i], thermoFluid[i])
+-    );
+-
+     Info<< "    Adding to rhoFluid\n" << endl;
+     rhoFluid.set
+     (
+@@ -293,6 +287,18 @@
+ 
+     pimpleDict.readIfPresent("solveSpecies", solveSpeciesFluid[i]);
+     pimpleDict.readIfPresent("solveEnergy", solveEnergyFluid[i]);
++    pimpleDict.readIfPresent("solveParcels", solveParcelsFluid[i]);
++
++    if (fluidRegions[i].steady() && solveParcelsFluid[i])
++    {
++        FatalErrorInFunction
++            << "solveParcels=true is not supported with steadyState ddt in "
++            << "fluid region " << fluidRegions[i].name() << nl
++            << "Use solveParcels false for the steady CHT/carrier solution. "
++            << "Then restart from the converged fields with a transient ddt "
++            << "scheme and solveParcels true for physical-time parcel tracking."
++            << exit(FatalError);
++    }
+ 
+     rhoMaxFluid.set
+     (
+@@ -334,22 +340,42 @@
+ 
+     turbulenceFluid[i].validate();
+ 
+-    // Construct Lagrangian/film models only after the carrier thermo, U, phi,
+-    // turbulence and auxiliary fields have been registered on this region.
+-    Info<< "    Constructing reacting nano cloud\n" << endl;
+-    parcelsFluid.set
+-    (
+-        i,
+-        new basicReactingTypeCloud
++    // Construct the Lagrangian thermo/cloud only when explicitly enabled.
++    // This is important for steady carrier/CHT calculations: when
++    // solveParcels=false, no cloud dictionary, SLGThermo liquid/solid data,
++    // injector, cloud function or parcel submodel is constructed.
++    if (solveParcelsFluid[i])
++    {
++        Info<< "    Adding to SLGThermo\n" << endl;
++        slgThermoFluid.set
+         (
+-            "reactingCloud1",
+-            rhoFluid[i],
+-            UFluid[i],
+-            g,
+-            slgThermoFluid[i]
+-        )
+-    );
++            i,
++            new SLGThermo(fluidRegions[i], thermoFluid[i])
++        );
++
++        Info<< "    Constructing reacting nano cloud\n" << endl;
++        parcelsFluid.set
++        (
++            i,
++            new basicReactingTypeCloud
++            (
++                "reactingCloud1",
++                rhoFluid[i],
++                UFluid[i],
++                g,
++                slgThermoFluid[i]
++            )
++        );
++    }
++    else
++    {
++        Info<< "    Reacting nano cloud disabled (solveParcels false)\n"
++            << endl;
++    }
+ 
++    // Keep the Eulerian surface-film model independent from solveParcels.
++    // With the usual 'none' film this is a no-op; retaining it preserves the
++    // original chtMultiRegionFoam/reactingParcelFoam film functionality.
+     Info<< "    Constructing surface film model\n" << endl;
+     surfaceFilmFluid.set
+     (
+diff -ruN review_solver/chtReactingNanoParcelFoam/fluid/pEqn.H chtReactingNanoParcelFoam_reviewed/fluid/pEqn.H
+--- review_solver/chtReactingNanoParcelFoam/fluid/pEqn.H	2026-09-03 09:56:29.000000000 +0000
++++ chtReactingNanoParcelFoam_reviewed/fluid/pEqn.H	2026-09-07 01:42:53.326492857 +0000
+@@ -35,11 +35,15 @@
+         fvc::ddt(rho) + psi*correction(fvm::ddt(p_rgh))
+       + fvc::div(phiHbyA)
+      ==
+-        parcels.Srho()
+-      + surfaceFilm.Srho()
++        surfaceFilm.Srho()
+       + fvOptions(psi, p_rgh, rho.name())
+     );
+ 
++    if (solveParcels)
++    {
++        p_rghDDtEqn -= parcelsPtr->Srho();
++    }
++
+     for (int nonOrth=0; nonOrth<=nNonOrthCorr; nonOrth++)
+     {
+         fvScalarMatrix p_rghEqn
+@@ -114,7 +118,10 @@
+     thermo.correctRho(psi*p - psip0,  rhoMin, rhoMax);
+ }
+ 
+-#include "rhoEqn.H"
++if (mesh.transient())
++{
++    #include "rhoEqn.H"
++}
+ #include "compressibleContinuityErrors.H"
+ 
+ rho = thermo.rho();
+diff -ruN review_solver/chtReactingNanoParcelFoam/fluid/pEqnSteady.H chtReactingNanoParcelFoam_reviewed/fluid/pEqnSteady.H
+--- review_solver/chtReactingNanoParcelFoam/fluid/pEqnSteady.H	1970-01-01 00:00:00.000000000 +0000
++++ chtReactingNanoParcelFoam_reviewed/fluid/pEqnSteady.H	2026-09-07 01:42:53.326639709 +0000
+@@ -0,0 +1,96 @@
++/*---------------------------------------------------------------------------*\
++  Steady pressure correction adapted from OpenFOAM-v2406
++  chtMultiRegionSimpleFoam/fluid/pEqn.H.
++
++  solveParcels=true is rejected at startup for steadyState operation, so this
++  equation deliberately contains no Lagrangian mass source.
++\*---------------------------------------------------------------------------*/
++
++{
++    volScalarField rAU("rAU", 1.0/UEqn.A());
++    surfaceScalarField rhorAUf("rhorAUf", fvc::interpolate(rho*rAU));
++    volVectorField HbyA(constrainHbyA(rAU*UEqn.H(), U, p_rgh));
++
++    surfaceScalarField phig
++    (
++        -rhorAUf*ghf*fvc::snGrad(rho)*mesh.magSf()
++    );
++
++    surfaceScalarField phiHbyA
++    (
++        "phiHbyA",
++        fvc::flux(rho*HbyA)
++    );
++
++    MRF.makeRelative(fvc::interpolate(rho), phiHbyA);
++
++    const bool closedVolume = adjustPhi(phiHbyA, U, p_rgh);
++
++    phiHbyA += phig;
++
++    constrainPressure(p_rgh, rho, U, phiHbyA, rhorAUf, MRF);
++
++    const dimensionedScalar compressibility = fvc::domainIntegrate(psi);
++    const bool compressible = (compressibility.value() > SMALL);
++
++    for (int nonOrth=0; nonOrth<=nNonOrthCorr; nonOrth++)
++    {
++        fvScalarMatrix p_rghEqn
++        (
++            fvm::laplacian(rhorAUf, p_rgh) == fvc::div(phiHbyA)
++        );
++
++        p_rghEqn.setReference
++        (
++            pRefCell,
++            getRefCellValue(p_rgh, pRefCell)
++        );
++
++        p_rghEqn.solve(p_rgh.select(finalIter));
++
++        if (nonOrth == nNonOrthCorr)
++        {
++            phi = phiHbyA - p_rghEqn.flux();
++
++            p_rgh.relax();
++
++            U = HbyA
++              + rAU*fvc::reconstruct((phig - p_rghEqn.flux())/rhorAUf);
++            U.correctBoundaryConditions();
++            fvOptions.correct(U);
++            K = 0.5*magSqr(U);
++        }
++    }
++
++    p = p_rgh + rho*gh;
++    pressureControl.limit(p);
++
++    if (closedVolume)
++    {
++        if (!compressible)
++        {
++            p += dimensionedScalar
++            (
++                "p",
++                p.dimensions(),
++                pRefValue - getRefCellValue(p, pRefCell)
++            );
++        }
++        else
++        {
++            p += (targetMass - fvc::domainIntegrate(psi*p))
++                /compressibility;
++        }
++
++        p_rgh = p - rho*gh;
++        p_rgh.correctBoundaryConditions();
++    }
++
++    rho = thermo.rho();
++    rho = max(rho, rhoMin);
++    rho = min(rho, rhoMax);
++    rho.relax();
++
++    Info<< "Min/max rho:" << min(rho).value() << ' '
++        << max(rho).value() << endl;
++}
+diff -ruN review_solver/chtReactingNanoParcelFoam/fluid/readFluidMultiRegionPIMPLEControls.H chtReactingNanoParcelFoam_reviewed/fluid/readFluidMultiRegionPIMPLEControls.H
+--- review_solver/chtReactingNanoParcelFoam/fluid/readFluidMultiRegionPIMPLEControls.H	2026-09-03 09:32:01.000000000 +0000
++++ chtReactingNanoParcelFoam_reviewed/fluid/readFluidMultiRegionPIMPLEControls.H	2026-09-07 01:42:53.326229725 +0000
+@@ -9,4 +9,30 @@
+     const bool momentumPredictor =
+         pimple.getOrDefault("momentumPredictor", true);
+ 
+-    pimple.readIfPresent("frozenFlow", frozenFlowFluid[i]);
++    // Re-read the Eulerian solve controls at run time.
++    // solveFlow takes precedence over the legacy frozenFlow entry.
++    bool solveFlow = !frozenFlowFluid[i];
++    if (pimple.readIfPresent("solveFlow", solveFlow))
++    {
++        frozenFlowFluid[i] = !solveFlow;
++    }
++    else
++    {
++        pimple.readIfPresent("frozenFlow", frozenFlowFluid[i]);
++    }
++
++    pimple.readIfPresent("solveSpecies", solveSpeciesFluid[i]);
++    pimple.readIfPresent("solveEnergy", solveEnergyFluid[i]);
++
++    // solveParcels is intentionally startup-only because false->true would
++    // require constructing SLGThermo and the cloud after field creation.
++    const bool requestedSolveParcels =
++        pimple.getOrDefault("solveParcels", solveParcelsFluid[i]);
++
++    if (requestedSolveParcels != solveParcelsFluid[i])
++    {
++        WarningInFunction
++            << "Ignoring run-time change of solveParcels for region "
++            << mesh.name() << ". solveParcels is read at solver startup; "
++            << "restart the solver to change it." << endl;
++    }
+diff -ruN review_solver/chtReactingNanoParcelFoam/fluid/rhoEqn.H chtReactingNanoParcelFoam_reviewed/fluid/rhoEqn.H
+--- review_solver/chtReactingNanoParcelFoam/fluid/rhoEqn.H	2026-09-03 09:54:42.000000000 +0000
++++ chtReactingNanoParcelFoam_reviewed/fluid/rhoEqn.H	2026-09-07 01:42:53.326413721 +0000
+@@ -1,5 +1,6 @@
+ /*---------------------------------------------------------------------------*\
+-  Continuity equation with reacting parcel and surface-film mass sources.
++  Transient continuity equation with optional reacting-parcel source.
++  This file must not be solved for steadyState ddt; solveFluid/pEqn guard it.
+ \*---------------------------------------------------------------------------*/
+ 
+ {
+@@ -8,11 +9,15 @@
+         fvm::ddt(rho)
+       + fvc::div(phi)
+      ==
+-        parcels.Srho(rho)
+-      + surfaceFilm.Srho()
++        surfaceFilm.Srho()
+       + fvOptions(rho)
+     );
+ 
++    if (solveParcels)
++    {
++        rhoEqn -= parcelsPtr->Srho(rho);
++    }
++
+     rhoEqn.solve();
+     fvOptions.correct(rho);
+ }
+diff -ruN review_solver/chtReactingNanoParcelFoam/fluid/setRegionFluidFields.H chtReactingNanoParcelFoam_reviewed/fluid/setRegionFluidFields.H
+--- review_solver/chtReactingNanoParcelFoam/fluid/setRegionFluidFields.H	2026-09-03 10:02:53.000000000 +0000
++++ chtReactingNanoParcelFoam_reviewed/fluid/setRegionFluidFields.H	2026-09-07 01:42:53.326165929 +0000
+@@ -1,5 +1,10 @@
+-    SLGThermo& slgThermo = slgThermoFluid[i];
+-    basicReactingTypeCloud& parcels = parcelsFluid[i];
++    const bool solveParcels = solveParcelsFluid[i];
++    basicReactingTypeCloud* parcelsPtr = nullptr;
++    if (solveParcels)
++    {
++        parcelsPtr = &parcelsFluid[i];
++    }
++
+     regionModels::surfaceFilmModel& surfaceFilm = surfaceFilmFluid[i];
+ 
+     CombustionModel<rhoReactionThermo>& reaction = reactionFluid[i];
+diff -ruN review_solver/chtReactingNanoParcelFoam/fluid/solveFluid.H chtReactingNanoParcelFoam_reviewed/fluid/solveFluid.H
+--- review_solver/chtReactingNanoParcelFoam/fluid/solveFluid.H	2026-09-03 10:00:58.000000000 +0000
++++ chtReactingNanoParcelFoam_reviewed/fluid/solveFluid.H	2026-09-07 01:42:53.326536751 +0000
+@@ -5,9 +5,9 @@
+ 
+ if (frozenFlow)
+ {
+-    // Fixed carrier velocity/pressure mode.  Unlike the stock CHT solver,
+-    // retain reactingNanoParcelFoam capability to advance species and energy.
+-    if (oCorr == 0 && solveSpecies)
++    // Fixed carrier velocity/pressure mode. Retain the original
++    // reactingNanoParcelFoam capability to advance species and energy.
++    if (mesh.transient() && oCorr == 0 && solveSpecies)
+     {
+         #include "rhoEqn.H"
+     }
+@@ -34,7 +34,10 @@
+ }
+ else
+ {
+-    if (oCorr == 0)
++    // rhoEqn is a transient density equation. With steadyState ddt it has no
++    // time diagonal and must not be solved. The steady pressure equation
++    // handles mass conservation instead.
++    if (mesh.transient() && oCorr == 0)
+     {
+         #include "rhoEqn.H"
+     }
+@@ -60,14 +63,20 @@
+     {
+         Info<< "\nSolving for fluid region " << fluidRegions[i].name() << endl;
+ 
+-        // --- PISO loop
++        // --- Pressure-velocity correction
+         for (int corr=0; corr<nCorr; corr++)
+         {
+-            #include "pEqn.H"
++            if (mesh.steady())
++            {
++                #include "pEqnSteady.H"
++            }
++            else
++            {
++                #include "pEqn.H"
++            }
+         }
+ 
+         turbulence.correct();
+-
+         rho = thermo.rho();
+     }
+ }
+diff -ruN review_solver/chtReactingNanoParcelFoam/lagrangian/intermediate/lnInclude/LiquidEvapFuchsKnudsen.C chtReactingNanoParcelFoam_reviewed/lagrangian/intermediate/lnInclude/LiquidEvapFuchsKnudsen.C
+--- review_solver/chtReactingNanoParcelFoam/lagrangian/intermediate/lnInclude/LiquidEvapFuchsKnudsen.C	2026-09-03 09:33:32.000000000 +0000
++++ chtReactingNanoParcelFoam_reviewed/lagrangian/intermediate/lnInclude/LiquidEvapFuchsKnudsen.C	2026-09-07 01:42:53.326938229 +0000
+@@ -39,11 +39,28 @@
+     scalar& Xsol
+ ) const
+ {
+-    const scalar Yliq = massliq/(massliq + masssol);
++    // Pure-liquid mode: no solid species participates in the solution.
++    if (solToSolMap_ < 0)
++    {
++        Xliq = 1;
++        Xsol = 0;
++        return;
++    }
++
++    const scalar massTot = massliq + masssol;
++
++    if (massTot <= ROOTVSMALL)
++    {
++        Xliq = 1;
++        Xsol = 0;
++        return;
++    }
++
++    const scalar Yliq = massliq/massTot;
+     const scalar Ysol = 1 - Yliq;
+     Xliq = Yliq/liquids_.properties()[liqToLiqMap_].W();
+     Xsol = Ysol/this->owner().thermo().solids().properties()[solToSolMap_].W();
+-    Xliq /= (Xliq + Xsol);
++    Xliq /= (Xliq + Xsol + ROOTVSMALL);
+     Xsol = 1 - Xliq;
+ }
+ 
+@@ -124,17 +141,18 @@
+     liqToLiqMap_(-1),
+     solToSolMap_(-1)
+ {
+-    if (solution_.size() > 2)
++    if (solution_.size() < 1 || solution_.size() > 2)
+     {
+         FatalErrorInFunction
+-            << "Solution is not well defined. It should be (liquid solid)"
+-            << nl <<  exit(FatalError);
++            << "Solution is not well defined. Use (liquid) for a pure liquid "
++            << "or (liquid solid) for a liquid-solid solution"
++            << nl << exit(FatalError);
+     }
+     else
+     {
+-        Info<< "Participating liquid-solid species:" << endl;
++        Info<< "Participating phase-change species:" << endl;
+ 
+-        Info<< "    " << solution_[0] << endl;
++        Info<< "    liquid: " << solution_[0] << endl;
+         liqToCarrierMap_ =
+             owner.composition().carrierId(solution_[0]);
+ 
+@@ -143,11 +161,15 @@
+         liqToLiqMap_ =
+             owner.composition().localId(idLiquid, solution_[0]);
+ 
+-        // Mapping for the solid
+-        const label idSolid = owner.composition().idSolid();
+-
+-        solToSolMap_ =
+-            owner.composition().localId(idSolid, solution_[1]);
++        // Optional solid species for a liquid-solid solution.
++        // For a pure liquid, leave solToSolMap_ = -1.
++        if (solution_.size() == 2)
++        {
++            Info<< "    solid : " << solution_[1] << endl;
++            const label idSolid = owner.composition().idSolid();
++            solToSolMap_ =
++                owner.composition().localId(idSolid, solution_[1]);
++        }
+ 
+         const word activityCoefficienType
+         (
+@@ -234,7 +256,8 @@
+     const scalar pSat = liquids_.properties()[lid].pv(pc, T);
+ 
+     scalar Xliq(0), Xsol(0);
+-    calcXcSolution(liqMass[lid], solMass[sid], Xliq, Xsol);
++    const scalar massSol = (sid >= 0 ? solMass[sid] : 0);
++    calcXcSolution(liqMass[lid], massSol, Xliq, Xsol);
+ 
+     // Activity Coefficient (gammaE*Xe)
+     const scalar gamma = activityCoeff(Xliq, Xsol);
+diff -ruN review_solver/chtReactingNanoParcelFoam/lagrangian/intermediate/submodels/Reacting/PhaseChangeModel/LiquidEvapFuchsKnudsen/LiquidEvapFuchsKnudsen.C chtReactingNanoParcelFoam_reviewed/lagrangian/intermediate/submodels/Reacting/PhaseChangeModel/LiquidEvapFuchsKnudsen/LiquidEvapFuchsKnudsen.C
+--- review_solver/chtReactingNanoParcelFoam/lagrangian/intermediate/submodels/Reacting/PhaseChangeModel/LiquidEvapFuchsKnudsen/LiquidEvapFuchsKnudsen.C	2026-09-03 09:33:32.000000000 +0000
++++ chtReactingNanoParcelFoam_reviewed/lagrangian/intermediate/submodels/Reacting/PhaseChangeModel/LiquidEvapFuchsKnudsen/LiquidEvapFuchsKnudsen.C	2026-09-07 01:42:53.326938229 +0000
+@@ -39,11 +39,28 @@
+     scalar& Xsol
+ ) const
+ {
+-    const scalar Yliq = massliq/(massliq + masssol);
++    // Pure-liquid mode: no solid species participates in the solution.
++    if (solToSolMap_ < 0)
++    {
++        Xliq = 1;
++        Xsol = 0;
++        return;
++    }
++
++    const scalar massTot = massliq + masssol;
++
++    if (massTot <= ROOTVSMALL)
++    {
++        Xliq = 1;
++        Xsol = 0;
++        return;
++    }
++
++    const scalar Yliq = massliq/massTot;
+     const scalar Ysol = 1 - Yliq;
+     Xliq = Yliq/liquids_.properties()[liqToLiqMap_].W();
+     Xsol = Ysol/this->owner().thermo().solids().properties()[solToSolMap_].W();
+-    Xliq /= (Xliq + Xsol);
++    Xliq /= (Xliq + Xsol + ROOTVSMALL);
+     Xsol = 1 - Xliq;
+ }
+ 
+@@ -124,17 +141,18 @@
+     liqToLiqMap_(-1),
+     solToSolMap_(-1)
+ {
+-    if (solution_.size() > 2)
++    if (solution_.size() < 1 || solution_.size() > 2)
+     {
+         FatalErrorInFunction
+-            << "Solution is not well defined. It should be (liquid solid)"
+-            << nl <<  exit(FatalError);
++            << "Solution is not well defined. Use (liquid) for a pure liquid "
++            << "or (liquid solid) for a liquid-solid solution"
++            << nl << exit(FatalError);
+     }
+     else
+     {
+-        Info<< "Participating liquid-solid species:" << endl;
++        Info<< "Participating phase-change species:" << endl;
+ 
+-        Info<< "    " << solution_[0] << endl;
++        Info<< "    liquid: " << solution_[0] << endl;
+         liqToCarrierMap_ =
+             owner.composition().carrierId(solution_[0]);
+ 
+@@ -143,11 +161,15 @@
+         liqToLiqMap_ =
+             owner.composition().localId(idLiquid, solution_[0]);
+ 
+-        // Mapping for the solid
+-        const label idSolid = owner.composition().idSolid();
+-
+-        solToSolMap_ =
+-            owner.composition().localId(idSolid, solution_[1]);
++        // Optional solid species for a liquid-solid solution.
++        // For a pure liquid, leave solToSolMap_ = -1.
++        if (solution_.size() == 2)
++        {
++            Info<< "    solid : " << solution_[1] << endl;
++            const label idSolid = owner.composition().idSolid();
++            solToSolMap_ =
++                owner.composition().localId(idSolid, solution_[1]);
++        }
+ 
+         const word activityCoefficienType
+         (
+@@ -234,7 +256,8 @@
+     const scalar pSat = liquids_.properties()[lid].pv(pc, T);
+ 
+     scalar Xliq(0), Xsol(0);
+-    calcXcSolution(liqMass[lid], solMass[sid], Xliq, Xsol);
++    const scalar massSol = (sid >= 0 ? solMass[sid] : 0);
++    calcXcSolution(liqMass[lid], massSol, Xliq, Xsol);
+ 
+     // Activity Coefficient (gammaE*Xe)
+     const scalar gamma = activityCoeff(Xliq, Xsol);
+diff -ruN review_solver/chtReactingNanoParcelFoam/verifyIntegration.py chtReactingNanoParcelFoam_reviewed/verifyIntegration.py
+--- review_solver/chtReactingNanoParcelFoam/verifyIntegration.py	2026-09-03 10:00:04.000000000 +0000
++++ chtReactingNanoParcelFoam_reviewed/verifyIntegration.py	2026-09-07 01:43:23.834112730 +0000
+@@ -3,32 +3,43 @@
+ import sys
+ 
+ root = Path(__file__).resolve().parent
++
++def text(rel):
++    return (root/rel).read_text()
++
+ checks = {
+-    "per-region cloud list": "PtrList<basicReactingTypeCloud> parcelsFluid" in (root/"fluid/createFluidFields.H").read_text(),
+-    "per-region SLGThermo": "PtrList<SLGThermo> slgThermoFluid" in (root/"fluid/createFluidFields.H").read_text(),
+-    "parcel evolve before PIMPLE": (root/"chtReactingNanoParcelFoam.C").read_text().index("parcelsFluid[i].evolve()") < (root/"chtReactingNanoParcelFoam.C").read_text().index("// --- PIMPLE loop"),
+-    "momentum coupling": "parcels.SU(U)" in (root/"fluid/UEqn.H").read_text(),
+-    "species coupling": "parcels.SYi(i, Yi)" in (root/"fluid/YEqn.H").read_text(),
+-    "energy coupling": "parcels.Sh(he)" in (root/"fluid/EEqn.H").read_text(),
+-    "mass coupling in rho": "parcels.Srho(rho)" in (root/"fluid/rhoEqn.H").read_text(),
+-    "mass coupling in p": "parcels.Srho()" in (root/"fluid/pEqn.H").read_text(),
+-    "CHT matrix assembly retained": "fvMatrixAssemblyPtr->addFvMatrix(EEqn)" in (root/"fluid/EEqn.H").read_text(),
+-    "closed-volume target mass": "targetMassFluid[i] +=" in (root/"chtReactingNanoParcelFoam.C").read_text(),
+-    "split solve controls": "solveSpeciesFluid" in (root/"fluid/createFluidFields.H").read_text(),
++    "solveParcels control declared": "solveParcelsFluid" in text("fluid/createFluidFields.H"),
++    "cloud construction conditional": "if (solveParcelsFluid[i])" in text("fluid/createFluidFields.H"),
++    "SLGThermo construction conditional": text("fluid/createFluidFields.H").find("if (solveParcelsFluid[i])") < text("fluid/createFluidFields.H").find("new SLGThermo"),
++    "parcel pointer nullable": "basicReactingTypeCloud* parcelsPtr = nullptr" in text("fluid/setRegionFluidFields.H"),
++    "parcel evolve guarded": "if (solveParcelsFluid[i])" in text("chtReactingNanoParcelFoam.C") and "parcelsFluid[i].evolve()" in text("chtReactingNanoParcelFoam.C"),
++    "steady mode detected": "steadyRun" in text("chtReactingNanoParcelFoam.C"),
++    "steady p equation present": (root/"fluid/pEqnSteady.H").is_file(),
++    "transient rho equation guarded": "mesh.transient()" in text("fluid/solveFluid.H") and "#include \"rhoEqn.H\"" in text("fluid/solveFluid.H"),
++    "momentum parcel source guarded": "if (solveParcels)" in text("fluid/UEqn.H") and "parcelsPtr->SU(U)" in text("fluid/UEqn.H"),
++    "species parcel source guarded": "parcelsPtr->SYi" in text("fluid/YEqn.H"),
++    "energy parcel source guarded": "parcelsPtr->Sh" in text("fluid/EEqn.H"),
++    "rho parcel source guarded": "parcelsPtr->Srho(rho)" in text("fluid/rhoEqn.H"),
++    "pressure parcel source guarded": "parcelsPtr->Srho()" in text("fluid/pEqn.H"),
++    "CHT matrix assembly retained": "fvMatrixAssemblyPtr->addFvMatrix(EEqn)" in text("fluid/EEqn.H"),
++    "pure liquid Fuchs-Knudsen supported": "solution_.size() < 1 || solution_.size() > 2" in text("lagrangian/intermediate/submodels/Reacting/PhaseChangeModel/LiquidEvapFuchsKnudsen/LiquidEvapFuchsKnudsen.C") and "solToSolMap_ < 0" in text("lagrangian/intermediate/submodels/Reacting/PhaseChangeModel/LiquidEvapFuchsKnudsen/LiquidEvapFuchsKnudsen.C"),
++    "runtime solve controls reread": "solveSpeciesFluid" in text("fluid/readFluidMultiRegionPIMPLEControls.H") and "requestedSolveParcels" in text("fluid/readFluidMultiRegionPIMPLEControls.H"),
+ }
+ 
+ for name, ok in checks.items():
+     print(f"{'PASS' if ok else 'FAIL'}  {name}")
+ 
+-models = [
+-    "lagrangian/intermediate/submodels/Reacting/PhaseChangeModel/LiquidEvapFuchsKnudsen/LiquidEvapFuchsKnudsen.C",
+-    "lagrangian/intermediate/submodels/Kinematic/ParticleForces/Coulomb/CoulombForce.C",
+-    "lagrangian/turbulence/submodels/Thermodynamic/ParticleForces/BrownianMotion/BrownianMotionForce.C",
+-]
+-for rel in models:
+-    p = root/rel
+-    ok = p.is_file() and p.stat().st_size > 0
+-    checks[rel] = ok
+-    print(f"{'PASS' if ok else 'FAIL'}  {rel}")
++# Catch accidental legacy unguarded reference names in the Eulerian equation files.
++legacy = {
++    "fluid/UEqn.H": "parcels.SU",
++    "fluid/YEqn.H": "parcels.SYi",
++    "fluid/EEqn.H": "parcels.Sh",
++    "fluid/rhoEqn.H": "parcels.Srho",
++    "fluid/pEqn.H": "parcels.Srho",
++}
++for rel, token in legacy.items():
++    ok = token not in text(rel)
++    checks[f"no legacy unguarded {token} in {rel}"] = ok
++    print(f"{'PASS' if ok else 'FAIL'}  no legacy unguarded {token} in {rel}")
+ 
+ sys.exit(0 if all(checks.values()) else 1)
