@@ -1,163 +1,563 @@
 # chtReactingNanoParcelFoam
 
-`chtReactingNanoParcelFoam` is a custom multi-region OpenFOAM solver that combines conjugate heat transfer, compressible reacting fluid regions, solid heat conduction, surface-film coupling, and the custom reacting nano-parcel Lagrangian models from `reactingNanoParcelFoam`. It is useful for heated or cooled multi-region systems where reacting nano-droplets exchange mass, species, momentum, and enthalpy with the carrier gas while the fluid and solids are thermally coupled.
+Multi-region compressible reacting flow, solid heat conduction and conjugate heat transfer (CHT), with an independent reacting nano cloud in each enabled fluid region. Choose this solver for thermal fluid/solid coupling with an externally supplied electric field. Meshes are static, following chtMultiRegionFoam.
 
-This solver has been checked only with OpenFOAM-v2406 through OpenFOAM-v2506.
+## Choosing between the solvers
 
-## Features
+| Solver | Mesh/thermal scope | Electric field |
+|---|---|---|
+| reactingChargedNanoParcelFoam | One fluid region; dynamic-mesh framework | Prescribed E |
+| chtReactingNanoParcelFoam | Static fluid/solid regions, CHT | Prescribed E for CoulombSep |
+| multiRegionChargedNanoParcelEFFoam | Static fluid/solid regions, CHT | Dielectric potential solve, or frozen E |
 
-- Extends the `chtMultiRegionFoam` style workflow with reacting fluid thermodynamics, solid regions, energy coupling, and optional reacting parcel clouds in each fluid region.
-- Reuses the custom nano-parcel model stack from `reactingNanoParcelFoam`, including Fuchs-Knudsen phase change, electric-force support, droplet density/diameter update controls, and custom distribution/cloud-function models.
-- Supports two workflows: steady carrier/species/CHT calculations without parcels, and transient carrier plus reacting nano parcels with two-way source coupling.
+These retain reacting thermophysical/cloud infrastructure. Skipping equations does not remove startup thermo fields or create a minimal isothermal kinematic solver.
 
-## Compilation
+The release adds independent dilute-species gas diffusivities and explicit dilute/legacy selection, plus nanoStokesDrag and charge IO/injection where missing. Existing thermal/reaction/film functionality is retained. The sibling reactingNanoParcelFoam solver and its shared libraries are not modified or required to be rebuilt.
 
-Load an OpenFOAM-v2406, v2412, or v2506 environment first:
+## Quick start with the supplied cases
 
-```bash
-source /path/to/OpenFOAM-v2506/etc/bashrc
-```
+After building, copy a case outside `solver/` and run it:
 
-Build from this directory:
+~~~sh
+mkdir -p "$FOAM_RUN"
+cp -a tutorials/diluteSpecies "$FOAM_RUN/chtReactingNanoParcelFoam-dilute"
+chtReactingNanoParcelFoam -case "$FOAM_RUN/chtReactingNanoParcelFoam-dilute"
+python3 tests/check_cases.py "$FOAM_RUN/chtReactingNanoParcelFoam-dilute"
+# Or copy tutorials/chargedDrift10nm and run the same executable.
+# The tutorials include a small ready-to-run mesh.
+bash tests/Allrun
+~~~
 
-```bash
+Validation scripts require Python 3 and NumPy. Tutorial gas properties deliberately
+use constant density/viscosity to isolate transport verification; replace them with
+validated thermophysical data for a physical DEG application.
+
+## Repository layout and build
+
+~~~text
+README.md, LICENSE
+Allwmake, Allwclean       repository-level dispatchers
+solver/                  full build sources and native build scripts
+  include/diluteSpeciesDiffusion.H
+  lagrangian/            bundled custom cloud sources
+tutorials/               self-contained native cases, outside compiled sources
+tests/                   case generation, numerical checks and release results
+~~~
+
+Fluid/solid equations are in solver/fluid and solver/solid.
+
+Use the **OpenCFD/OpenFOAM.com** family; Foundation numbered releases are a different code line. Intended versions are listed below with actual validation status.
+
+A development installation needs source headers, wmake, runtime libraries, a compatible C++ compiler, make and the installation's MPI/runtime dependencies. Python 3 supports validation scripts, not the solver runtime.
+
+~~~sh
+source /path/to/OpenFOAM-v2406/etc/bashrc
+cd /path/to/chtReactingNanoParcelFoam
 ./Allwmake
-```
+command -v chtReactingNanoParcelFoam
+chtReactingNanoParcelFoam -help
+~~~
 
-The build script compiles the bundled custom Lagrangian libraries first, then:
+The root dispatcher builds solver/Allwmake. Native build scripts compile the bundled private Lagrangian libraries before the executable. Outputs use FOAM_USER_APPBIN/LIBBIN; private library names start with chtNano. Build scripts use the installed native lagrangian core; do not replace its library with a bundled custom basic library or rename private outputs to common shared-library names.
 
-```text
-$FOAM_USER_APPBIN/chtReactingNanoParcelFoam
-```
+Build and run under the same sourced environment. Use separate source copies and bin/lib outputs per release: identical WM_OPTIONS does not mean compatible ABI. Do not carry old objects, generated lnInclude or binaries into another release.
 
-To clean generated build files:
-
-```bash
+~~~sh
 ./Allwclean
-```
+./Allwmake
+chtReactingNanoParcelFoam -case /path/to/working-case
+# After configuring and running the appropriate mesh decomposition:
+mpirun -np 2 chtReactingNanoParcelFoam -parallel -case /path/to/working-case
+~~~
 
-If your checkout loses executable bits, run:
+The parallel command is an invocation example, not evidence for every case/model. Copy tutorials into a separate working directory before meshing/running; generated fields and logs do not belong in solver/.
 
-```bash
-chmod +x Allwmake Allwclean PREFLIGHT.sh
-```
+## Native case structure
 
-## Required Case Setup
+~~~text
+case/
+  0/
+    fluid/       U, p, p_rgh, T, carrier species Yi
+    solid/       solid thermo/temperature fields
+  constant/
+    regionProperties, g
+    fluid/
+      polyMesh/
+      thermophysicalProperties
+      chemistryProperties, combustionProperties
+      turbulenceProperties, radiationProperties, surfaceFilmProperties
+      speciesDiffusionProperties
+      reactingCloud1Properties, particlePositions  [when parcels enabled]
+    solid/
+      polyMesh/
+      thermophysicalProperties
+  system/
+    controlDict, fvSolution
+    fluid/fvSchemes, fluid/fvSolution
+    solid/fvSchemes, solid/fvSolution
+~~~
 
-Start from a valid multi-region CHT case. The case must include:
+Region names are illustrative. Set constant/regionProperties, for example:
 
-- `constant/regionProperties`
-- fluid-region thermophysical and turbulence dictionaries
-- solid-region thermophysical dictionaries
-- region-specific `system/<region>/fvSchemes` and `system/<region>/fvSolution`
-- region-specific initial fields for pressure, velocity, temperature, species, and solid temperature as required by the selected physics
+~~~foam
+regions
+(
+    fluid (fluid)
+    solid (solid)
+);
+~~~
 
-For each fluid region, provide:
+Use valid reacting fluid thermo, solid thermo and thermal interface conditions. Multiple fluids/solids, or no solids, can be declared. Each region owns a registry: its cloud/positions/diffusion dictionary belongs under `constant/<fluid>`, and its field under `<time>/<fluid>`. Do not put region inputs at the case root.
 
-```text
-constant/<fluidRegion>/surfaceFilmProperties
-```
+A selected CoulombSep force reads/registers its named E from the fluid region time directory when absent from the registry. No solid electric field or electricProperties is required.
 
-Use OpenFOAM's `none` surface-film model when no film is needed:
+For inert carrier tests, disable chemistry/combustion with their native model selections; flow freezing does not disable species reaction sources. When no film is needed, the Eulerian surface-film framework still constructs independently of parcel activity. Supply:
 
-```text
+~~~foam
+FoamFile { format ascii; class dictionary; object surfaceFilmProperties; }
 surfaceFilmModel none;
-```
+~~~
 
-For parcel calculations in a fluid region, provide:
+## Split physics controls
 
-```text
-constant/<fluidRegion>/reactingCloud1Properties
-```
+In `system/<fluid>/fvSolution/PIMPLE`:
 
-Fields used by custom parcel forces, such as `E` for `CoulombForce`, must be placed in the corresponding fluid-region object registry/time directory.
-
-## Usage
-
-Run in serial:
-
-```bash
-chtReactingNanoParcelFoam
-```
-
-For parallel cases:
-
-```bash
-decomposePar -allRegions
-mpirun -np <N> chtReactingNanoParcelFoam -parallel
-reconstructPar -allRegions
-```
-
-Each fluid region reads split-solve controls under `PIMPLE` in that region's `fvSolution`:
-
-```text
+~~~foam
 PIMPLE
 {
-    nOuterCorrectors          3;
-    nCorrectors               1;
-    nNonOrthogonalCorrectors  0;
-
-    solveFlow       true;
-    solveSpecies    true;
-    solveEnergy     true;
-    solveParcels    false;
+    solveFlow false;
+    solveSpecies true;
+    solveEnergy false;
+    solveParcels false;
+    nCorrectors 1;
+    nNonOrthogonalCorrectors 0;
 }
-```
+~~~
 
-`solveFlow false` freezes the carrier flow but still allows species and energy equations to advance when those switches are enabled. For energy-coupled CHT, keep `solveEnergy true`.
+Defaults: flow/species/energy/parcels enabled. solveFlow overrides the legacy frozenFlow flag (default false). Flow/species/energy flags are reread; solveParcels is startup-only, and changing it requires restarting. Frozen flow may still solve species and/or energy; fluid energy is independent of the species flag.
 
-## Recommended Workflows
+solveParcels false avoids SLGThermo/cloud construction and its cloud/liquid/solid parcel inputs. Carrier thermo, radiation and Eulerian film remain. Enabled clouds evolve once per physical step before outer thermal/fluid iterations; source terms are reused within that step.
 
-### Steady Carrier, Species, and CHT
+A steadyState ddt scheme requires solveParcels false. Obtain a steady carrier/CHT solution, then restart with transient schemes and solveParcels true for physical flight/residence times. Steady Time is an iteration label. Active regions need matching steady/transient formulations.
 
-Use `steadyState` as the default `ddtScheme` in every fluid and solid region and set:
+Global system/fvSolution supplies PIMPLE/nOuterCorrectors. Implicit assembled thermal coupling requires solveEnergy true for participating regions. Freezing energy requires compatible explicit thermal interface treatment; it cannot leave an active assembled energy interface in a frozen region.
 
-```text
-solveParcels false;
-```
+The CHT solid heat equation remains active; fluid solveEnergy false is not a solid-energy switch.
 
-In this mode:
+Equation skipping does not remove startup T/thermo requirements, and is not equivalent to disabling parcel phase-change/heat-transfer submodels.
 
-- parcel dictionaries and parcel clouds are not constructed;
-- no physical-time parcel evolution is performed;
-- the transient density equation is skipped;
-- steady pressure correction is used for closed-volume CHT behavior.
+## Prescribed electric field
 
-This mode is recommended for obtaining a converged carrier and solid temperature field before injecting parcels.
+This solver does not compute E from phiE, solve a dielectric potential equation or couple particle/surface charge back to E. Provide a volVectorField E with dimensions [1 1 -3 0 0 -1 0] (V/m), for example:
 
-### Transient Carrier with Reacting Nano Parcels
+~~~foam
+FoamFile { format ascii; class volVectorField; object E; }
+dimensions [1 1 -3 0 0 -1 0];
+internalField uniform (0 -50000 0);
+boundaryField
+{
+    inlet { type zeroGradient; }
+    outlet { type zeroGradient; }
+    wall { type zeroGradient; }
+}
+~~~
 
-Use a transient `ddtScheme` in all regions and set:
+Adapt all patch names/types, including empty/symmetry/cyclic patches, and verify interpolation for your geometry.
 
-```text
-solveParcels true;
-```
 
-The solver advances reacting parcels once per physical time step before the PIMPLE/CHT outer iterations. Parcel and film source terms are then reused while the Eulerian flow, species, energy, and fluid-solid heat transfer converge at that time level.
+## Independent dilute-species transport
 
-### Two-Stage Procedure
+Species fields Yi are **mass fractions**. Place speciesDiffusionProperties in the carrier's constant registry: constant/speciesDiffusionProperties for the single-region solver; `constant/<fluid>/speciesDiffusionProperties` for a multi-region solver. A complete explicit example is:
 
-1. Run the steady carrier/species/CHT case with `solveParcels false`.
-2. Restart from the converged fields.
-3. Change all regions to transient time schemes.
-4. Set `solveParcels true` and run the coupled parcel calculation.
+~~~foam
+FoamFile { format ascii; class dictionary; object speciesDiffusionProperties; }
+model dilute;
+turbulentSchmidt 0.9;
+species
+{
+    H2O
+    {
+        D [0 2 -1 0 0 0 0] 2.5e-5;
+        Tref 298.15;
+        pref 101325;
+        temperatureExponent 1.75;
+        pressureExponent 1;
+    }
+    DEG
+    {
+        D [0 2 -1 0 0 0 0] 8e-6;
+        Tref 298.15;
+        pref 101325;
+        temperatureExponent 1.75;
+        pressureExponent 1;
+    }
+}
+~~~
 
-## Coupled Source Terms
+The numbers are illustrative, not calibrated material data. H2O and DEG must be actual carrier gas species. Specify the dominant background in thermophysicalProperties, for example inertSpecie N2;. Every other **active** species requires its own D entry; no N2 entry is required.
 
-When parcels are enabled, source terms are coupled into the carrier equations:
+~~~text
+Di(T,p) = Dref,i (T/Tref,i)^temperatureExponent,i
+                  (pref,i/p)^pressureExponent,i
+Gammai = rho Di + mut / turbulentSchmidt       [mut = muEff - mu]
 
-- continuity: parcel and film `Srho`
-- pressure/continuity correction: parcel and film mass sources
-- momentum: parcel `SU(U)`
-- species: parcel `SYi` and film species sources
-- energy: parcel `Sh(he)` and film heat sources
+d(rho Yi)/dt + div(phi Yi) - div(Gammai grad(Yi)) = Si
+Ybackground = max(0, 1 - sum(Yi for solved active non-background species))
+~~~
 
-For closed-volume cases, the solver updates the target carrier mass using volume-integrated parcel and film mass transfer so that the pressure reference remains consistent with mass added to or removed from the gas.
+phi is mass flux. Si includes enabled parcel, reaction, surface-film and fvOptions sources. D is a molecular diffusivity in m2/s; rho D and mut have dynamic-viscosity dimensions. Molecular species diffusivity is independent of momentum diffusivity.
 
-## Notes
+| Entry | Units / type | Default or requirement |
+|---|---|---|
+| model | dilute or legacy | Absent/empty dictionary: legacy; nonempty dictionary without model: dilute |
+| turbulentSchmidt | scalar, dimensionless | 0.9; positive, finite |
+| species.<name>.D | dimensioned scalar, m2/s | Mandatory for each active non-background specie; positive, finite |
+| species.<name>.Tref | plain scalar, K | 298.15; positive, finite |
+| species.<name>.pref | plain scalar, Pa absolute | 101325; positive, finite |
+| temperatureExponent | plain scalar | 0; finite |
+| pressureExponent | plain scalar | 0; finite |
 
-- All custom Lagrangian source directories needed by the nano-parcel model are bundled and built locally.
-- Generated `lnInclude` directories and old object files are intentionally not stored in the repository; `wmake` recreates them.
-- This solver uses a static multi-region mesh architecture. The dynamic-mesh operations from `reactingNanoParcelFoam` are not transplanted into the multi-region CHT workflow.
-- The supplied `LiquidEvapFuchsKnudsen` model accepts either one volatile liquid entry, such as `solution (H2O);`, or two entries with the volatile liquid first and a non-volatile/solid component second.
+D may also be a bare SI scalar where the dimensionedScalar reader permits it. Tref/pref are plain-scalar entries: do not attach dimension sets. Zero exponents give constant D. Nonzero exponents require positive local absolute T/p. Restart after editing coefficients; they are read at startup, even when the species solve is disabled.
 
+An absent dictionary or explicit model legacy; preserves the old Gamma=muEff behavior, effectively molecular/turbulent Schmidt numbers of one, and prints a legacy notice. It does not give independent gas diffusivities. Invalid explicit dilute input (missing species/D, invalid D or model) fails instead of silently reverting.
+
+### Approximation and composition limits
+
+This is independent dilute mass-fraction Fick transport against a dominant background, not Maxwell-Stefan multicomponent diffusion. Background closure implies the balancing background flux; no separate background PDE is solved. Cross-diffusion, Soret, barodiffusion and Eulerian species electromigration are absent. The pressure exponent changes D only.
+
+Use trace concentrations with total dilute mass fraction much smaller than one. All non-background species contributing to the mixture should be active: closure sums the solved active species. Nonzero inactive species and sums above one are outside this dilute setup. Clipping is a numerical bound, not a valid replacement for conservative composition.
+
+For ideal-gas partial pressure/saturation calculations, convert mass to mole fractions:
+
+~~~text
+xi = (Yi/Wi) / sum_j(Yj/Wj)
+pi = xi p
+Si = pi / psat,i(T)
+~~~
+
+Do not directly substitute mass fraction Yi for mole fraction xi.
+
+## Charged nano parcels
+
+The cloud is **reactingCloud1**, not reactCloud1. The native dictionary is reactingCloud1Properties. Each parcel carries a signed chargeNumber:
+
+~~~text
+q = chargeNumber * 1.602176634e-19 C
+FCoulomb = q E
+~~~
+
+This is charge per physical particle, not per computational parcel; nParticle sets the number of represented particles. Positive charge drifts along E; negative charge against E. The runtime force is case-sensitive CoulombSep. Its E entry chooses a named electric field, default E.
+
+chargeNumber is written with Lagrangian fields and read on restart. An old field-based cloud without it defaults to zero charge. Keep this file for charged restarts; binary parcels are not guaranteed interchangeable with stock types or another label/scalar build.
+
+### Drag selection
+
+~~~foam
+particleForces
+{
+    nanoStokesDrag { meanFreePath 6.5e-8; }
+    CoulombSep { E E; }
+}
+~~~
+
+nanoStokesDrag accepts meanFreePath **or** lambda, one plain SI scalar in metres. Supply exactly one; negative values fail. The configured mean free path is constant, not automatically scaled with T/p.
+
+~~~text
+Kn = 2 lambda/dp
+Cc = 1 + Kn [1.257 + 0.4 exp(-1.1/Kn)]       (Cc=1 for lambda=0)
+Fdrag = (3 pi mu dp/Cc) (U-Up)
+tauP = rhoP dp^2 Cc/(18 mu)
+terminal electric drift = q Cc E/(3 pi mu dp)
+~~~
+
+This is a low-Re spherical-particle model. sphereDrag remains a continuum sphere correlation with **no Cunningham correction** in this source. Choose one drag model: enabling both adds their drags. Brownian motion, gravity, turbulent dispersion, collisions, image force and dielectrophoresis are not automatically included by either model.
+
+Use analytical velocity integration for stiff nanoparticle drag, then verify position/contact-time convergence. Stability alone is not trajectory accuracy. Choose native patchInteractionModel behavior (stick/escape/rebound) explicitly; the tracked particle is a point unless a separate wall model says otherwise.
+
+### Native cloud dictionary: inert 10 nm solid particle
+
+This example uses no reactions/phase change and one physical particle per parcel. It still uses the reacting-multiphase composition infrastructure. Provide matching NaCl solid properties in SLGThermo input, or replace NaCl with a material for which you provide consistent data. Patch names below must match your mesh.
+
+~~~foam
+FoamFile { format ascii; class dictionary; object reactingCloud1Properties; }
+    solution
+    {
+        active          true;
+        coupled         no;
+        transient       yes;
+        cellValueSourceCorrection no;
+        maxCo           0.3;
+
+        sourceTerms
+        {
+            schemes
+            {
+                rho             explicit 1;
+                U               explicit 1;
+                Yi              explicit 1;
+                h               explicit 1;
+                radiation       explicit 1;
+            }
+        }
+
+        interpolationSchemes
+        {
+            rho             cell;
+            U               cellPoint;
+            E               cell;
+            thermo:mu       cell;
+            mu              cell;
+            T               cell;
+            Cp              cell;
+            kappa           cell;
+            p               cell;
+        }
+
+        integrationSchemes
+        {
+            U               analytical;
+            T               analytical;
+        }
+    }
+
+    constantProperties
+    {
+        parcelTypeId        -1;
+        rhoMin              1e-15;
+        rho0                1000;
+        T0                  298.15;
+        TMin                200;
+        TMax                5000;
+        Cp0                 850;
+        epsilon0            0;
+        f0                  0;
+        pMin                1000;
+        minParcelMass       1e-30;
+        volumeUpdateMethod  constantRho;
+        TDevol              1e30;
+        LDevol              0;
+        hRetentionCoeff     0;
+        lockParcelDiameterSet false;
+        lockParcelDiameter  0;
+    }
+
+    subModels
+    {
+        particleForces
+        {
+            nanoStokesDrag { meanFreePath 6.5e-8; }
+            CoulombSep
+            {
+                E E;
+            }
+        }
+
+        injectionModels
+        {
+            centreParticle
+            {
+                type manualInjection;
+                positionsFile particlePositions;
+                SOI 0;
+                parcelBasisType fixed;
+                nParticle 1;
+                massTotal 0;
+                U0 (0 0 0);
+                parcelCharge 1;
+                sizeDistribution { type fixedValue; fixedValueDistribution { value 1e-8; } }
+            }
+        }
+
+        dispersionModel none;
+        patchInteractionModel localInteraction;
+        chemicalReactionModel none;
+        collisionModel none;
+        heatTransferModel none;
+        compositionModel singleMixtureFraction;
+        phaseChangeModel none;
+        devolatilisationModel none;
+        surfaceReactionModel none;
+        stochasticCollisionModel none;
+        radiationModel none;
+        surfaceFilmModel none;
+        radiation off;
+
+        localInteractionCoeffs
+        {
+            patches
+            (
+                inlet { type escape; }
+                outlet { type escape; }
+                wall { type stick; }
+            );
+        }
+
+        singleMixtureFractionCoeffs
+        {
+            phases
+            (
+                gas {}
+                liquid {}
+                solid
+                {
+                    NaCl 1;
+                }
+            );
+            YGasTot0        0;
+            YLiquidTot0     0;
+            YSolidTot0      1;
+        }
+    }
+
+
+cloudFunctions {}
+
+~~~
+
+The manual positions file belongs to the same constant registry as the cloud dictionary (constant/particlePositions or `constant/<fluid>/particlePositions`):
+
+~~~foam
+FoamFile { format ascii; class vectorField; object particlePositions; }
+1
+(
+    (0.005 0.005 0.005)
+)
+~~~
+
+Place the point inside your mesh. manualInjection injects the listed positions at SOI. parcelCharge sets the signed charge **number**, not coulombs; its default is zero. sizeDistribution/value is diameter in metres. Use physical integral charge states when appropriate; scalar storage also permits an explicit effective-charge model.
+
+For a patch source replace the manual entry with:
+
+~~~foam
+patchSource
+{
+    type patchInjection;
+    patch inlet;
+    SOI 0;
+    duration 0.1;
+    parcelsPerSecond 100;
+    parcelBasisType fixed;
+    nParticle 1;
+    massTotal 0;
+    velocityType fixedValue;
+    U0 (0.1 0 0);
+    flowRateProfile constant 1;
+    parcelCharge -1;
+    sizeDistribution
+    {
+        type fixedValue;
+        fixedValueDistribution { value 1e-8; }
+    }
+}
+~~~
+
+Both manualInjection and patchInjection set chargeNumber from parcelCharge. Do not assume every other injector implements it.
+
+solution/coupled false disables parcel source feedback. true enables the implemented mass/species/momentum/enthalpy source coupling. CoulombSep is a non-coupled external force: direct qE is not added again as a gas body force. This switch does not enable electric space-charge feedback.
+
+## Phase change and DEG applications
+
+The existing phase-change runtime model is liquidEvapFuchsKnudsen. This release does not supply calibrated DEG gas/liquid material functions.
+
+A DEG application requires user-supplied consistent gas thermochemistry, molecular weight, liquid-property functions (density, Cp, vapour pressure, surface tension, latent heat and diffusivity), and a matching cloud composition. The phase-change source evaluates:
+
+~~~text
+Dab = liquids.properties()[liquidId].D(pc, Ts)
+~~~
+
+That liquidProperties diffusivity is **separate** from the Eulerian gas D in speciesDiffusionProperties. Changing one does not override the other. Keep their definitions consistent for the physical problem.
+
+The native coefficient dictionary is liquidEvapFuchsKnudsenCoeffs. Existing entries include gamma, alpham, solution and activityCoefficient; Hoff additionally reads ic. This illustrates the dictionary shape, not calibrated DEG/NaCl data:
+
+~~~foam
+phaseChangeModel liquidEvapFuchsKnudsen;
+liquidEvapFuchsKnudsenCoeffs
+{
+    gamma 6.5e-8; // mean gas free path, m
+    alpham 1.0;
+    solution (DEG NaCl);
+    activityCoefficient Hoff;
+    ic 1.0;
+}
+~~~
+
+Every species/phase name must map to the carrier and cloud composition. UNIFAC is not implemented. All three solvers support one liquid, for example solution (H2O);, as well as (liquid solid). No pure-liquid option supplies missing DEG material data. A cloud with phaseChangeModel none still requires valid properties for phases declared by its composition model.
+
+Freezing carrier energy does not switch off parcel heat transfer or phase change: choose those cloud submodels separately and assess the resulting thermal assumption.
+
+## Validation status and limits
+
+Built and numerically verified with **OpenCFD OpenFOAM v2406, v2412 and v2506** on Ubuntu 24.04 (WSL2), GCC 13.3, double precision and 32-bit labels. The v2406 build is 630d60de3b-20240620; v2412/v2506 use official patch 260127 packages. This statement covers the tested builds and cases, not every platform or third-party model combination:
+
+| OpenCFD release | Native build | Two-species diffusion / T,p law / invalid input | Charged drift / tracking | Status |
+|---|---|---|---|---|
+| v2406 | PASS | PASS | PASS | Numerically verified |
+| v2412 | PASS | PASS | PASS | Numerically verified |
+| v2506 | PASS | PASS | PASS | Numerically verified |
+
+The diffusion test compares two trace species in N2 with independent analytical decays A(t)=A(0) exp(-D k^2 t). Other cases exercise temperature/pressure exponents, absent/explicit legacy settings and invalid-input rejection. They do not validate DEG material functions or a condensation experiment.
+
+Machine-readable results are in [validation/](validation/). The release checks include independent-D transient decay, the temperature/pressure law, turbulent Schmidt mixing, legacy compatibility, invalid-input rejection, steady frozen fields, signed 10 nm drift, restart, and benign pure-water phase change. CHT/EF versions also pass a fluid-solid conduction test. CHT passes a 10000-substep advancing-trajectory regression. The EF version additionally passes dielectric/flow/deposition cases and a two-rank particle ownership/charge transfer test on each release. Dynamic-mesh operation, reactive chemistry accuracy, DEG material data, and every two-way source balance are not covered by these verification cases.
+
+Before application:
+- Check species mass-fraction sums, trace loading, species activation, absolute T/p, property validity and boundary conditions.
+- Check selected forces and phase/chemistry submodels in startup output.
+- Verify mesh/time-step convergence of trajectories, contact times and coupled source balances.
+- Decide whether neglected Brownian motion, gravity, turbulence, collisions and additional electric forces are physically acceptable.
+- The electric model does not add charging kinetics, ion/corona generation, deposited surface-charge accumulation, space-charge, image forces or dielectric polarization forces.
+
+## License
+
+GPL-3.0-or-later, consistent with the bundled OpenFOAM-derived sources. Retain upstream notices and license terms when redistributing modified code.
+
+## Reproducing the transport checks
+
+Run the supplied acceptance cases:
+
+~~~sh
+python3 tests/make_cases.py --solver chtReactingNanoParcelFoam
+bash tests/Allrun --solver chtReactingNanoParcelFoam
+~~~
+
+Keep run cases outside solver/. The generator's independent expected values and acceptance summaries should be retained with the release report.
+
+## Tracking implementation note
+
+This version uses the installed native Lagrangian particle base. Loading an older
+custom basic library alongside the native library caused a shutdown double free;
+the default build no longer does so. Native `trackToFace` keeps its stuck-tracking
+protection. An additional guard counts only consecutive iterations with neither
+time nor position progress and stops with an explicit error after a sustained
+stall. Normal trajectories may take arbitrarily many advancing substeps.
+`CoulombSep` reads/registers its prescribed field at cloud construction, before
+the first time increment, so the field belongs at the initial/restart time.
+
+## Changes relevant when migrating an existing case
+
+- Keep native `reactingCloud1Properties`, `singleMixtureFractionCoeffs`, and
+  `inertSpecie`. A new `speciesDiffusionProperties` dictionary selects independent
+  molecular diffusivities; absent dictionaries retain the legacy coefficient.
+- The species Laplacian keeps the legacy `laplacian(muEff,<species>)` scheme
+  lookup name, including in dilute mode. A `default Gauss linear orthogonal;`
+  entry is sufficient for the supplied mesh.
+- Transient injection defers movement to the normal cloud tracking step and
+  preserves the initial partial timestep. This avoids advancing a new parcel twice.
+- Pure-liquid Fuchs-Knudsen input no longer reads an absent solid component.
+- Private distribution/parcel libraries keep their own output names and distribution
+  namespaces. Do not load an older similarly modified cloud library in the same
+  process, or add it to `controlDict/libs`.
+
+## Included tutorial cases
+
+| Case | Purpose |
+|---|---|
+| `tutorials/diluteSpecies` | Independent DEG/H2O tracer diffusion in N2; constant-property analytic verification |
+| `tutorials/chargedDrift10nm` | One +1e, 10 nm particle; prescribed field and Stokes-Cunningham drift |
+| `tutorials/pureLiquidH2O` | Pure-liquid Fuchs-Knudsen runtime and native parcel composition check |
+| `tutorials/solidHeatConduction` | Fluid/solid temperature solution and interface heat flux |
+
+Run a copied case with the executable; run `bash tests/Allrun` for automatic
+generation and numerical assertions. The reported 10 nm terminal drift is
+0.1038719232 m/s at 50000 V/m. Finite-step displacement differs from the exact
+relaxation solution by about 0.059%, and the terminal velocity matches to floating
+point precision. Do not interpret the illustrative DEG diffusivity as measured data.

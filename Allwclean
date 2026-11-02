@@ -1,7 +1,4 @@
 #!/bin/sh
-cd "${0%/*}" || exit 1
-wclean lagrangian/turbulence
-wclean lagrangian/intermediate
-wclean lagrangian/basic
-wclean lagrangian/distributionModels
-wclean
+set -eu
+cd "$(dirname "$0")"
+exec ./solver/Allwclean "$@"

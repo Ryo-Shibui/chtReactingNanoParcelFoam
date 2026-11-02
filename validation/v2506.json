@@ -1,0 +1,575 @@
+{
+  "solver": "chtReactingNanoParcelFoam",
+  "OpenFOAM": "2506",
+  "build": "_d6aa836d-20260127 OPENFOAM=2506 patch=260127 version=2506",
+  "platform": "Ubuntu 24.04 / WSL2; GCC 13.3; DP scalar64, label32; OpenMPI 4.1.6",
+  "testCount": 20,
+  "allPassed": true,
+  "tests": [
+    {
+      "solver": "chtReactingNanoParcelFoam",
+      "variant": "dilute",
+      "passed": true,
+      "checks": {
+        "DEGMeanConservationError": 1.9651164376299768e-18,
+        "DEGContinuumMaxErrorOverInitialAmplitude": 5.912912768056077e-06,
+        "DEGDiscreteEulerMaxErrorOverInitialAmplitude": 2.04853224227558e-11,
+        "DEGInferredDRelativeError": 4.077223509918835e-13,
+        "H2OMeanConservationError": 5.221517662690189e-16,
+        "H2OContinuumMaxErrorOverInitialAmplitude": 2.940387493991642e-05,
+        "H2ODiscreteEulerMaxErrorOverInitialAmplitude": 3.7823043308460313e-11,
+        "H2OInferredDRelativeError": 6.758611411413623e-11,
+        "massFractionSumMaxError": 1.1102230246251565e-16,
+        "backgroundClosureMaxError": 1.1102230246251565e-16,
+        "backgroundMeanConservationError": 5.551115123125783e-16,
+        "UFrozenMaxChange": 0.0,
+        "TFrozenMaxChange": 0.0,
+        "pFrozenMaxChange": 0.0,
+        "p_rghFrozenMaxChange": 0.0
+      },
+      "tracers": {
+        "DEG": {
+          "measuredAmplitude": 1.9298173118294355e-05,
+          "expectedContinuumAmplitude": 1.92980548454543e-05,
+          "expectedDiscreteEulerAmplitude": 1.9298173118294118e-05,
+          "inferredD": 7.240000000002952e-06,
+          "expectedD": 7.24e-06
+        },
+        "H2O": {
+          "measuredAmplitude": 0.00045302373163940015,
+          "expectedContinuumAmplitude": 0.00045300902789446147,
+          "expectedDiscreteEulerAmplitude": 0.0004530237316363881,
+          "inferredD": 1.999999999864828e-05,
+          "expectedD": 2e-05
+        }
+      },
+      "failures": [],
+      "exitCode": 0
+    },
+    {
+      "solver": "chtReactingNanoParcelFoam",
+      "variant": "temperaturePressureLaw",
+      "passed": true,
+      "checks": {
+        "DEGMeanConservationError": 8.131516293641283e-20,
+        "DEGContinuumMaxErrorOverInitialAmplitude": 4.54943271843331e-06,
+        "DEGDiscreteEulerMaxErrorOverInitialAmplitude": 6.897558696081218e-12,
+        "DEGInferredDRelativeError": 2.9744791723742656e-13,
+        "H2OMeanConservationError": 1.1449174941446927e-16,
+        "H2OContinuumMaxErrorOverInitialAmplitude": 2.191985168983196e-05,
+        "H2ODiscreteEulerMaxErrorOverInitialAmplitude": 1.1292182466871026e-11,
+        "H2OInferredDRelativeError": 2.2572080601089318e-11,
+        "massFractionSumMaxError": 1.1102230246251565e-16,
+        "backgroundClosureMaxError": 1.1102230246251565e-16,
+        "backgroundMeanConservationError": 1.1102230246251565e-16,
+        "UFrozenMaxChange": 0.0,
+        "TFrozenMaxChange": 0.0,
+        "pFrozenMaxChange": 0.0,
+        "p_rghFrozenMaxChange": 0.0
+      },
+      "tracers": {
+        "DEG": {
+          "measuredAmplitude": 1.9411408617977793e-05,
+          "expectedContinuumAmplitude": 1.941131761809307e-05,
+          "expectedDiscreteEulerAmplitude": 1.9411408617977573e-05,
+          "inferredD": 6.054142394366688e-06,
+          "expectedD": 6.054142394364887e-06
+        },
+        "H2O": {
+          "measuredAmplitude": 0.00046040269628028544,
+          "expectedContinuumAmplitude": 0.00046039173500369836,
+          "expectedDiscreteEulerAmplitude": 0.00046040269627943645,
+          "inferredD": 1.6724150260298986e-05,
+          "expectedD": 1.6724150260676485e-05
+        }
+      },
+      "failures": [],
+      "exitCode": 0
+    },
+    {
+      "solver": "chtReactingNanoParcelFoam",
+      "variant": "legacyAbsent",
+      "passed": true,
+      "checks": {
+        "DEGMeanConservationError": 1.5449880957918438e-18,
+        "DEGContinuumMaxErrorOverInitialAmplitude": 1.8432874728668705e-05,
+        "DEGDiscreteEulerMaxErrorOverInitialAmplitude": 5.397971566262204e-12,
+        "DEGInferredDRelativeError": 1.1241318110309964e-11,
+        "H2OMeanConservationError": 4.119968255444917e-17,
+        "H2OContinuumMaxErrorOverInitialAmplitude": 1.8432874731785787e-05,
+        "H2ODiscreteEulerMaxErrorOverInitialAmplitude": 5.397158414632841e-12,
+        "H2OInferredDRelativeError": 1.1241318110309964e-11,
+        "massFractionSumMaxError": 1.1102230246251565e-16,
+        "backgroundClosureMaxError": 1.1102230246251565e-16,
+        "backgroundMeanConservationError": 1.1102230246251565e-16,
+        "UFrozenMaxChange": 0.0,
+        "TFrozenMaxChange": 0.0,
+        "pFrozenMaxChange": 0.0,
+        "p_rghFrozenMaxChange": 0.0
+      },
+      "tracers": {
+        "DEG": {
+          "measuredAmplitude": 1.8570348615133773e-05,
+          "expectedContinuumAmplitude": 1.856997991217789e-05,
+          "expectedDiscreteEulerAmplitude": 1.8570348615118012e-05,
+          "inferredD": 1.5033222591193133e-05,
+          "expectedD": 1.5033222591362126e-05
+        },
+        "H2O": {
+          "measuredAmplitude": 0.00046425871537834483,
+          "expectedContinuumAmplitude": 0.00046424949780444726,
+          "expectedDiscreteEulerAmplitude": 0.0004642587153779503,
+          "inferredD": 1.5033222591193133e-05,
+          "expectedD": 1.5033222591362126e-05
+        }
+      },
+      "failures": [],
+      "exitCode": 0
+    },
+    {
+      "solver": "chtReactingNanoParcelFoam",
+      "variant": "legacyExplicit",
+      "passed": true,
+      "checks": {
+        "DEGMeanConservationError": 1.5449880957918438e-18,
+        "DEGContinuumMaxErrorOverInitialAmplitude": 1.8432874728668705e-05,
+        "DEGDiscreteEulerMaxErrorOverInitialAmplitude": 5.397971566262204e-12,
+        "DEGInferredDRelativeError": 1.1241318110309964e-11,
+        "H2OMeanConservationError": 4.119968255444917e-17,
+        "H2OContinuumMaxErrorOverInitialAmplitude": 1.8432874731785787e-05,
+        "H2ODiscreteEulerMaxErrorOverInitialAmplitude": 5.397158414632841e-12,
+        "H2OInferredDRelativeError": 1.1241318110309964e-11,
+        "massFractionSumMaxError": 1.1102230246251565e-16,
+        "backgroundClosureMaxError": 1.1102230246251565e-16,
+        "backgroundMeanConservationError": 1.1102230246251565e-16,
+        "UFrozenMaxChange": 0.0,
+        "TFrozenMaxChange": 0.0,
+        "pFrozenMaxChange": 0.0,
+        "p_rghFrozenMaxChange": 0.0
+      },
+      "tracers": {
+        "DEG": {
+          "measuredAmplitude": 1.8570348615133773e-05,
+          "expectedContinuumAmplitude": 1.856997991217789e-05,
+          "expectedDiscreteEulerAmplitude": 1.8570348615118012e-05,
+          "inferredD": 1.5033222591193133e-05,
+          "expectedD": 1.5033222591362126e-05
+        },
+        "H2O": {
+          "measuredAmplitude": 0.00046425871537834483,
+          "expectedContinuumAmplitude": 0.00046424949780444726,
+          "expectedDiscreteEulerAmplitude": 0.0004642587153779503,
+          "inferredD": 1.5033222591193133e-05,
+          "expectedD": 1.5033222591362126e-05
+        }
+      },
+      "failures": [],
+      "exitCode": 0
+    },
+    {
+      "solver": "chtReactingNanoParcelFoam",
+      "variant": "missingD",
+      "exitCode": 1,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "solver": "chtReactingNanoParcelFoam",
+      "variant": "missingSpecies",
+      "exitCode": 1,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "solver": "chtReactingNanoParcelFoam",
+      "variant": "negativeD",
+      "exitCode": 1,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "solver": "chtReactingNanoParcelFoam",
+      "variant": "steadyField",
+      "passed": true,
+      "checks": {
+        "UFrozenMaxChange": 0.0,
+        "TFrozenMaxChange": 0.0,
+        "pFrozenMaxChange": 0.0,
+        "p_rghFrozenMaxChange": 0.0,
+        "N2FrozenMaxChange": 0.0,
+        "DEGFrozenMaxChange": 5.421010862427522e-20,
+        "H2OFrozenMaxChange": 4.336808689942018e-19
+      },
+      "tracers": {},
+      "failures": [],
+      "exitCode": 0
+    },
+    {
+      "solver": "chtReactingNanoParcelFoam",
+      "variant": "turbulentMixing",
+      "passed": true,
+      "checks": {
+        "DEGMeanConservationError": 2.8853330315270487e-17,
+        "DEGContinuumMaxErrorOverInitialAmplitude": 1.0017231948176563e-05,
+        "DEGDiscreteEulerMaxErrorOverInitialAmplitude": 1.581139461980657e-10,
+        "DEGInferredDRelativeError": 1.3102540902839958e-13,
+        "H2OMeanConservationError": 1.6046192152785466e-15,
+        "H2OContinuumMaxErrorOverInitialAmplitude": 3.706411345026639e-05,
+        "H2ODiscreteEulerMaxErrorOverInitialAmplitude": 9.513050069909212e-11,
+        "H2OInferredDRelativeError": 1.5744781002632936e-10,
+        "massFractionSumMaxError": 1.1102230246251565e-16,
+        "backgroundClosureMaxError": 1.1102230246251565e-16,
+        "backgroundMeanConservationError": 1.6653345369377348e-15,
+        "UFrozenMaxChange": 0.0,
+        "TFrozenMaxChange": 0.0,
+        "pFrozenMaxChange": 0.0,
+        "p_rghFrozenMaxChange": 0.0
+      },
+      "tracers": {
+        "DEG": {
+          "measuredAmplitude": 1.9014663348148134e-05,
+          "expectedContinuumAmplitude": 1.9014462979111627e-05,
+          "expectedDiscreteEulerAmplitude": 1.901466334814809e-05,
+          "inferredD": 1.0240000000001342e-05,
+          "expectedD": 1.024e-05
+        },
+        "H2O": {
+          "measuredAmplitude": 0.0004463704313979034,
+          "expectedContinuumAmplitude": 0.0004463518970737906,
+          "expectedDiscreteEulerAmplitude": 0.00044637043138993866,
+          "inferredD": 2.2999999996378704e-05,
+          "expectedD": 2.3000000000000003e-05
+        }
+      },
+      "failures": [],
+      "exitCode": 0
+    },
+    {
+      "solver": "chtReactingNanoParcelFoam",
+      "variant": "missingE",
+      "passed": true,
+      "exitCode": 1,
+      "failures": []
+    },
+    {
+      "solver": "chtReactingNanoParcelFoam",
+      "variant": "negative",
+      "passed": true,
+      "position": [
+        0.01007809519999815,
+        0.009999999999999998,
+        0.0005129999999999952
+      ],
+      "velocity": [
+        -0.1038719231575913,
+        0.0,
+        0.0
+      ],
+      "displacement": [
+        -5.1904800001849674e-05,
+        -1.734723475976807e-18,
+        -4.7704895589362195e-18
+      ],
+      "expectedDisplacement": -5.1935256375116656e-05,
+      "terminalVelocity": -0.10387192315759124,
+      "checks": {
+        "terminalDriftDisplacementRelativeError": 0.0005864296316745193,
+        "transverseDisplacementMax": 4.7704895589362195e-18,
+        "terminalVelocityRelativeError": 6.680240138983231e-16,
+        "chargeNumberIOError": 0.0,
+        "diameterRelativeIOError": 3.3087224502121107e-16,
+        "UCarrierFrozenMaxChange": 0.0,
+        "TCarrierFrozenMaxChange": 0.0,
+        "pCarrierFrozenMaxChange": 0.0,
+        "p_rghCarrierFrozenMaxChange": 0.0,
+        "N2CarrierFrozenMaxChange": 0.0,
+        "DEGCarrierFrozenMaxChange": 5.421010862427522e-20,
+        "H2OCarrierFrozenMaxChange": 4.336808689942018e-19,
+        "ECarrierFrozenMaxChange": 0.0
+      },
+      "failures": [],
+      "exitCode": 0
+    },
+    {
+      "solver": "chtReactingNanoParcelFoam",
+      "variant": "restart",
+      "passed": true,
+      "position": [
+        0.01018190480000184,
+        0.01,
+        0.0005129999999999991
+      ],
+      "velocity": [
+        0.1038719231575913,
+        0.0,
+        0.0
+      ],
+      "displacement": [
+        5.1904800001839266e-05,
+        0.0,
+        -8.673617379884035e-19
+      ],
+      "expectedDisplacement": 5.1935256375116656e-05,
+      "terminalVelocity": 0.10387192315759124,
+      "checks": {
+        "terminalDriftDisplacementRelativeError": 0.0005864296318749292,
+        "transverseDisplacementMax": 8.673617379884035e-19,
+        "terminalVelocityRelativeError": 6.680240138983231e-16,
+        "chargeNumberIOError": 0.0,
+        "diameterRelativeIOError": 3.3087224502121107e-16,
+        "UCarrierFrozenMaxChange": 0.0,
+        "TCarrierFrozenMaxChange": 0.0,
+        "pCarrierFrozenMaxChange": 0.0,
+        "p_rghCarrierFrozenMaxChange": 0.0,
+        "N2CarrierFrozenMaxChange": 0.0,
+        "DEGCarrierFrozenMaxChange": 5.421010862427522e-20,
+        "H2OCarrierFrozenMaxChange": 4.336808689942018e-19,
+        "ECarrierFrozenMaxChange": 0.0,
+        "checkpointChargeNumberIOError": 0.0,
+        "restartPositionMaxDifference": 1.0842021724855044e-19,
+        "restartVelocityMaxDifference": 0.0,
+        "restartChargeNumberDifference": 0.0
+      },
+      "failures": [],
+      "exitCode": 0
+    },
+    {
+      "solver": "chtReactingNanoParcelFoam",
+      "variant": "reverseField",
+      "passed": true,
+      "position": [
+        0.01007809519999815,
+        0.009999999999999998,
+        0.0005129999999999952
+      ],
+      "velocity": [
+        -0.1038719231575913,
+        0.0,
+        0.0
+      ],
+      "displacement": [
+        -5.1904800001849674e-05,
+        -1.734723475976807e-18,
+        -4.7704895589362195e-18
+      ],
+      "expectedDisplacement": -5.1935256375116656e-05,
+      "terminalVelocity": -0.10387192315759124,
+      "checks": {
+        "terminalDriftDisplacementRelativeError": 0.0005864296316745193,
+        "transverseDisplacementMax": 4.7704895589362195e-18,
+        "terminalVelocityRelativeError": 6.680240138983231e-16,
+        "chargeNumberIOError": 0.0,
+        "diameterRelativeIOError": 3.3087224502121107e-16,
+        "UCarrierFrozenMaxChange": 0.0,
+        "TCarrierFrozenMaxChange": 0.0,
+        "pCarrierFrozenMaxChange": 0.0,
+        "p_rghCarrierFrozenMaxChange": 0.0,
+        "N2CarrierFrozenMaxChange": 0.0,
+        "DEGCarrierFrozenMaxChange": 5.421010862427522e-20,
+        "H2OCarrierFrozenMaxChange": 4.336808689942018e-19,
+        "ECarrierFrozenMaxChange": 0.0
+      },
+      "failures": [],
+      "exitCode": 0
+    },
+    {
+      "solver": "chtReactingNanoParcelFoam",
+      "variant": "noCoulomb",
+      "passed": true,
+      "position": [
+        0.01013,
+        0.01,
+        0.000513
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "displacement": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "expectedDisplacement": 0.0,
+      "terminalVelocity": 0,
+      "checks": {
+        "forceFreeDisplacementMax": 0.0,
+        "transverseDisplacementMax": 0.0,
+        "forceFreeVelocityMax": 0.0,
+        "chargeNumberIOError": 0.0,
+        "diameterRelativeIOError": 3.3087224502121107e-16,
+        "UCarrierFrozenMaxChange": 0.0,
+        "TCarrierFrozenMaxChange": 0.0,
+        "pCarrierFrozenMaxChange": 0.0,
+        "p_rghCarrierFrozenMaxChange": 0.0,
+        "N2CarrierFrozenMaxChange": 0.0,
+        "DEGCarrierFrozenMaxChange": 5.421010862427522e-20,
+        "H2OCarrierFrozenMaxChange": 4.336808689942018e-19
+      },
+      "failures": [],
+      "exitCode": 0
+    },
+    {
+      "solver": "chtReactingNanoParcelFoam",
+      "variant": "positive",
+      "passed": true,
+      "position": [
+        0.01018190480000184,
+        0.01,
+        0.0005129999999999992
+      ],
+      "velocity": [
+        0.1038719231575913,
+        0.0,
+        0.0
+      ],
+      "displacement": [
+        5.1904800001839266e-05,
+        0.0,
+        -7.589415207398531e-19
+      ],
+      "expectedDisplacement": 5.1935256375116656e-05,
+      "terminalVelocity": 0.10387192315759124,
+      "checks": {
+        "terminalDriftDisplacementRelativeError": 0.0005864296318749292,
+        "transverseDisplacementMax": 7.589415207398531e-19,
+        "terminalVelocityRelativeError": 6.680240138983231e-16,
+        "chargeNumberIOError": 0.0,
+        "diameterRelativeIOError": 3.3087224502121107e-16,
+        "UCarrierFrozenMaxChange": 0.0,
+        "TCarrierFrozenMaxChange": 0.0,
+        "pCarrierFrozenMaxChange": 0.0,
+        "p_rghCarrierFrozenMaxChange": 0.0,
+        "N2CarrierFrozenMaxChange": 0.0,
+        "DEGCarrierFrozenMaxChange": 5.421010862427522e-20,
+        "H2OCarrierFrozenMaxChange": 4.336808689942018e-19,
+        "ECarrierFrozenMaxChange": 0.0
+      },
+      "failures": [],
+      "exitCode": 0
+    },
+    {
+      "solver": "chtReactingNanoParcelFoam",
+      "variant": "neutral",
+      "passed": true,
+      "position": [
+        0.01013,
+        0.01,
+        0.000513
+      ],
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "displacement": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "expectedDisplacement": 0.0,
+      "terminalVelocity": 0,
+      "checks": {
+        "forceFreeDisplacementMax": 0.0,
+        "transverseDisplacementMax": 0.0,
+        "forceFreeVelocityMax": 0.0,
+        "chargeNumberIOError": 0.0,
+        "diameterRelativeIOError": 3.3087224502121107e-16,
+        "UCarrierFrozenMaxChange": 0.0,
+        "TCarrierFrozenMaxChange": 0.0,
+        "pCarrierFrozenMaxChange": 0.0,
+        "p_rghCarrierFrozenMaxChange": 0.0,
+        "N2CarrierFrozenMaxChange": 0.0,
+        "DEGCarrierFrozenMaxChange": 5.421010862427522e-20,
+        "H2OCarrierFrozenMaxChange": 4.336808689942018e-19,
+        "ECarrierFrozenMaxChange": 0.0
+      },
+      "failures": [],
+      "exitCode": 0
+    },
+    {
+      "solver": "chtReactingNanoParcelFoam",
+      "variant": "signReversalComparison",
+      "passed": true,
+      "relativeAntisymmetryError": 2.0052752068194114e-13,
+      "failures": []
+    },
+    {
+      "solver": "chtReactingNanoParcelFoam",
+      "variant": "pureLiquidH2O",
+      "passed": true,
+      "checks": {
+        "d": 9.994601083041156e-07,
+        "rho": 997.0,
+        "T": 298.15,
+        "mass0": 5.220279792715039e-16,
+        "Yliquid": 1.0,
+        "Ysolid": 0.0,
+        "Ygas": 0.0,
+        "YH2O(l)": 1.0,
+        "finalMass": 5.21182919963181e-16,
+        "massRatio": 0.9983811992041074,
+        "diameterRatio": 0.9994601083041156
+      },
+      "failures": [],
+      "scope": "Construction and benign pure-water evaporation runtime/finite-state regression; no DEG or predictive evaporation-accuracy claim",
+      "exitCode": 0
+    },
+    {
+      "solver": "chtReactingNanoParcelFoam",
+      "variant": "longTracking",
+      "passed": true,
+      "position": [
+        0.01018193596157885,
+        0.01,
+        0.0005130000000001555
+      ],
+      "velocity": [
+        0.1038719231575913,
+        0.0,
+        0.0
+      ],
+      "displacement": [
+        5.193596157885075e-05,
+        0.0,
+        1.5547459153442134e-16
+      ],
+      "expectedDisplacement": 5.1935961578795616e-05,
+      "terminalVelocity": 0.10387192315759124,
+      "checks": {
+        "terminalDriftDisplacementRelativeError": 1.0615319095853042e-12,
+        "transverseDisplacementMax": 1.5547459153442134e-16,
+        "terminalVelocityRelativeError": 6.680240138983231e-16,
+        "chargeNumberIOError": 0.0,
+        "diameterRelativeIOError": 3.3087224502121107e-16,
+        "UCarrierFrozenMaxChange": 0.0,
+        "TCarrierFrozenMaxChange": 0.0,
+        "pCarrierFrozenMaxChange": 0.0,
+        "p_rghCarrierFrozenMaxChange": 0.0,
+        "N2CarrierFrozenMaxChange": 0.0,
+        "DEGCarrierFrozenMaxChange": 5.421010862427522e-20,
+        "H2OCarrierFrozenMaxChange": 4.336808689942018e-19,
+        "ECarrierFrozenMaxChange": 0.0
+      },
+      "failures": [],
+      "exitCode": 0,
+      "minimumNormalSubsteps": 10000,
+      "maxCo": 0.0001
+    },
+    {
+      "time": 300.0,
+      "checks": {
+        "fluidMaxTemperatureErrorK": 1.1332872418279294e-09,
+        "solidMaxTemperatureErrorK": 4.718003765447065e-12,
+        "fluidHeatFluxRelativeError": 1.5440641488814106e-10,
+        "solidHeatFluxRelativeError": 2.1109031447252848e-10,
+        "frozenVelocityMaxChange": 0.0,
+        "speciesMaxChange": 0.0
+      },
+      "variant": "solidHeatConduction",
+      "passed": true,
+      "solver": "chtReactingNanoParcelFoam"
+    }
+  ]
+}
