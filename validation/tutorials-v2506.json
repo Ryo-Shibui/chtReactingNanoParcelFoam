@@ -1,0 +1,57 @@
+{
+  "solver": "chtReactingNanoParcelFoam",
+  "OpenFOAM": "2506",
+  "scope": "Physical tutorial Allrun, separate from the retained manufactured regression suite",
+  "runSucceeded": true,
+  "cases": {
+    "waterVapourDiffusion": {
+      "temperature_K": 320.0,
+      "pressure_Pa": 101325.0,
+      "background": "N2",
+      "mu_N2_Pa_s": 1.8767818774793383e-05,
+      "rho_N2_kg_m3": 1.0668374965098097,
+      "D_legacy_background_limit": 1.7592012688148712e-05,
+      "D_H2O_N2_reference": 2.900763763904148e-05,
+      "reference_to_legacy_ratio": 1.648909545101862,
+      "models": {
+        "legacy": {
+          "passed": true,
+          "inferredD_m2_s": 1.759099927636741e-05,
+          "referenceD_m2_s": 1.7592012688148712e-05,
+          "inferredD_relative_error": 5.760635802539433e-05,
+          "initialAmplitude": 2.000000000003875e-05,
+          "finalAmplitude": 1.2959402855994406e-05,
+          "massFractionSumMaxError": 4.991562718714704e-13,
+          "meanH2OMaxChange": 3.9071635521154696e-11
+        },
+        "speciesDependent": {
+          "passed": true,
+          "inferredD_m2_s": 2.9007637638335496e-05,
+          "referenceD_m2_s": 2.900763763904148e-05,
+          "inferredD_relative_error": 2.4337901268020755e-11,
+          "initialAmplitude": 2.000000000003875e-05,
+          "finalAmplitude": 9.779734555087662e-06,
+          "massFractionSumMaxError": 4.991562718714704e-13,
+          "meanH2OMaxChange": 5.6717066983171145e-11
+        }
+      },
+      "actual_diffusivity_ratio": 1.6490045382075447,
+      "final_profile_difference_over_initial_amplitude": 0.15898341504502916,
+      "passed": true
+    },
+    "chargedParticleDrift": {
+      "passed": true,
+      "temperature_K": 320.0,
+      "mu_N2_Pa_s": 1.8767818774793383e-05,
+      "terminalVelocity_m_s": [
+        0.10017582925925816,
+        0.0,
+        0.0
+      ],
+      "relaxationTime_s": 6.54758538248559e-09,
+      "displacementRelativeError": 0.0005869121326586729,
+      "velocityRelativeError": 2.5771534760208897e-12,
+      "chargeNumber": 1.0
+    }
+  }
+}

@@ -1,0 +1,13 @@
+#!/bin/sh
+cd "${0%/*}" || exit 1
+set -e
+
+. "$WM_PROJECT_DIR/bin/tools/RunFunctions"
+
+restore0Dir
+runApplication -overwrite blockMesh -region fluid
+runApplication -overwrite setExprFields -region fluid
+runApplication -overwrite postProcess -region fluid -func writeCellCentres -time 0
+runApplication -overwrite $(getApplication)
+
+# ************************************************************************* #

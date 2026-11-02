@@ -1,0 +1,35 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     |                                                 |
+|   \\  /    A nd           | OpenCFD v2406 / v2412 / v2506                    |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      speciesDiffusionProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// H2O in N2: Marrero and Mason (1972), Table 13 and Figure 76.
+// D = 1.87e-10*T^2.072*(101325/p) [m2/s], valid 282-373 K (about +/-4%).
+// The tutorial is at 320 K and 101325 Pa; D = 2.9007637639e-5 m2/s.
+model dilute;
+turbulentSchmidt 0.9;
+
+species
+{
+    H2O
+    {
+        D                   [0 2 -1 0 0 0 0] 2.505362314376117e-5;
+        Tref                298.15;
+        pref                101325;
+        temperatureExponent 2.072;
+        pressureExponent    1;
+    }
+}
+
+// ************************************************************************* //

@@ -1,0 +1,33 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     |                                                 |
+|   \\  /    A nd           | OpenCFD v2406 / v2412 / v2506                    |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      setExprFieldsDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+expressions
+(
+    waterVapour
+    {
+        field       H2O;
+        dimensions  [0 0 0 0 0 0 0];
+        expression  "0.0001 + 0.00002*cos(3.141592653589793*pos().y()/0.020)";
+    }
+    nitrogen
+    {
+        field       N2;
+        dimensions  [0 0 0 0 0 0 0];
+        expression  "1 - (0.0001 + 0.00002*cos(3.141592653589793*pos().y()/0.020))";
+    }
+);
+
+// ************************************************************************* //
